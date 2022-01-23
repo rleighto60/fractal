@@ -117,50 +117,58 @@ UBYTE get_color(int iter, int i) {
     return palette[i][k] + (palette[i][j] - palette[i][k]) * f;
 }
 
-int generate(int x1, int type) {
-    double vx1, vx2, vy1, vy2;
-    double x, y, vx, vy, xtemp, ratio = (double) xres / yres;
+int iterate_mandel(double vx, double vy) {
+    int iter = 0;
+    double x = 0.0, y = 0.0, xtemp;
+
+    while (x * x + y * y <= escape && iter < maxIter) {
+        xtemp = x * x - y * y + vx;
+        y = 2 * x * y + vy;
+        x = xtemp;
+        iter++;
+    }
+    return iter;
+}
+
+int iterate_julia(double x, double y) {
+    int iter = 0;
+    double xtemp;
+
+    while (x * x + y * y <= escape && iter < maxIter) {
+        xtemp = x * x - y * y + cx;
+        y = 2 * x * y + cy;
+        x = xtemp;
+        iter++;
+    }
+    return iter;
+}
+
+int generate(int x1) {
+    double dx, dy, x, y;
     int iter, bpos;
     UBYTE rc, gc, bc;
 
     if (xres > yres) {
-        vx1 = xc - (size / 2.0) * ratio;
-        vx2 = xc + (size / 2.0) * ratio;
-        vy1 = yc - size / 2.0;
-        vy2 = yc + size / 2.0;
+        dx = size * (double) xres / yres;
+        dy = size;
     } else {
-        vx1 = xc - size / 2.0;
-        vx2 = xc + size / 2.0;
-        vy1 = yc - (size / 2.0) / ratio;
-        vy2 = yc + (size / 2.0) / ratio;
+        dx = size;
+        dy = size * (double) yres / xres;
     }
+
     for (int py = 0; py < yres; py++) {
-        vy = vy1 + (vy2 - vy1) * (double) py / yres;
+        y = yc + dy * (((double) py / yres) - 0.5);
         for (int px = x1; px < xres; px += nthread) {
             bpos = xres * py + px;
-            vx = vx1 + (vx2 - vx1) * (double) px / xres;
-            iter = 0;
+            x = xc + dx * (((double) px / xres) - 0.5);
+            iter = maxIter;
 
             switch (type) {
             case MANDEL:
-                x = 0.0;
-                y = 0.0;
-                while (x * x + y * y <= 4 && iter < maxIter) {
-                    xtemp = x * x - y * y + vx;
-                    y = 2 * x * y + vy;
-                    x = xtemp;
-                    iter++;
-                }
+                iter = iterate_mandel(x, y);
                 break;
             case JULIA:
-                x = vx;
-                y = vy;
-                while (x * x + y * y <= 4 && iter < maxIter) {
-                    xtemp = x * x - y * y + cx;
-                    y = 2 * x * y + cy;
-                    x = xtemp;
-                    iter++;
-                }
+                iter = iterate_julia(x, y);
                 break;
             }
             rc = get_color(iter, 0);
@@ -174,21 +182,14 @@ int generate(int x1, int type) {
     return 0;
 }
 
-void* _generate_mandel(void *arg) {
+void* _generate(void *arg) {
     int *px1 = (int*) arg;
 
-    generate(*px1, MANDEL);
+    generate(*px1);
     pthread_exit(NULL);
 }
 
-void* _generate_julia(void *arg) {
-    int *px1 = (int*) arg;
-
-    generate(*px1, JULIA);
-    pthread_exit(NULL);
-}
-
-int generate_spectrum() {
+int spectrum() {
     int iter, bpos, max = ncolor * dmax;
     UBYTE rc, gc, bc;
 
@@ -217,12 +218,14 @@ void reset() {
     cx = 0.0;
     cy = 0.0;
     size = 2.5;
+    escape = 4.0;
     dmax = 100;
     nthread = 1;
     palette[0][0] = palette[1][0] = palette[2][0] = 0;
     palette[0][1] = palette[1][1] = palette[2][1] = 255;
     ncolor = 2;
     shift = 0;
+    type = MANDEL;
 }
 
 #define MAXARG 80
@@ -357,9 +360,11 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
                 return (0);
             }
 
+            type = MANDEL;
+
             for (it = 0; it < nthread; ++it) {
                 xs[it] = it;
-                if ((rc = pthread_create(&thr[it], NULL, _generate_mandel, &xs[it]))) {
+                if ((rc = pthread_create(&thr[it], NULL, _generate, &xs[it]))) {
                     fprintf(stderr, "main - error: pthread_create, rc: %d\n",
                             rc);
                     return (0);
@@ -396,9 +401,11 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
                 return (0);
             }
 
+            type = JULIA;
+
             for (it = 0; it < nthread; ++it) {
                 xs[it] = it;
-                if ((rc = pthread_create(&thr[it], NULL, _generate_julia, &xs[it]))) {
+                if ((rc = pthread_create(&thr[it], NULL, _generate, &xs[it]))) {
                     fprintf(stderr, "main - error: pthread_create, rc: %d\n",
                             rc);
                     return (0);
@@ -421,7 +428,7 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
                         "main - could not allocate memory for bitmap\n");
                 return (0);
             }
-            generate_spectrum();
+            spectrum();
             break;
 
         /*******************************************************************************

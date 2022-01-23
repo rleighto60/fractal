@@ -1,6 +1,8 @@
 # Fractal
 
-![mandel.rexx](test/mandel.rexx)
+![intro](julia.jpg)
+
+![julia.rexx](test/julia.rexx)
 
 ## Introduction
 

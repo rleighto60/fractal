@@ -49,8 +49,8 @@ APIRET APIENTRY handler( PRXSTRING, PUSHORT, PRXSTRING);
 
 char hostname[] = "FRACTAL";
 
-double cx, cy, xc, yc, size;
-unsigned int mask = 0;
+double cx, cy, xc, yc, size, escape = 4.0;
+unsigned int mask = 0, type = MANDEL;
 int pipe = FALSE, ncolor = 2, shift = 0, maxIter = 1000, dmax = 100, nthread = 1;
 long xres, yres;
 UBYTE *rbuf, *gbuf, *bbuf;
