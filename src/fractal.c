@@ -143,7 +143,7 @@ int iterate_julia(double x, double y) {
     return iter;
 }
 
-int generate(int x1) {
+int generate_fractal1(int x1) {
     double dx, dy, x, y;
     int iter, bpos;
     UBYTE rc, gc, bc;
@@ -182,11 +182,44 @@ int generate(int x1) {
     return 0;
 }
 
-void* _generate(void *arg) {
+void* _generate_fractal(void *arg) {
     int *px1 = (int*) arg;
 
-    generate(*px1);
+    generate_fractal1(*px1);
     pthread_exit(NULL);
+}
+
+int fractal() {
+    int it, rc, xs[MAX_THREAD];
+    pthread_t thr[MAX_THREAD];
+
+    if (!open_buffer()) {
+        close_buffer();
+        fprintf(stderr,
+                "main - could not allocate memory for bitmap\n");
+        return (0);
+    }
+
+    if (xres % nthread != 0 || nthread > MAX_THREAD) {
+        fprintf(stderr,
+                "main - number of threads must be a multiple of xres and no greater than %d\n",
+                MAX_THREAD);
+        return (0);
+    }
+
+    for (it = 0; it < nthread; ++it) {
+        xs[it] = it;
+        if ((rc = pthread_create(&thr[it], NULL, _generate_fractal, &xs[it]))) {
+            fprintf(stderr, "main - error: pthread_create, rc: %d\n",
+                    rc);
+            return (0);
+        }
+    }
+
+    for (it = 0; it < nthread; ++it) {
+        pthread_join(thr[it], NULL);
+    }
+    return (1);
 }
 
 int spectrum() {
@@ -237,8 +270,6 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
     char commands[7][10] = { "reset", "palette", "view", "mandel", "julia", "spectrum", "save" };
     int ncom = 7;
     int i, m, n, nc, argn;
-    int it, rc, xs[MAX_THREAD];
-    pthread_t thr[MAX_THREAD];
 
     if (command->strptr != NULL) {
         for (i = 0; i < MAXARG; i++)
@@ -346,33 +377,9 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
          result:  none
          *******************************************************************************/
         case 3:
-            if (!open_buffer()) {
-                close_buffer();
-                fprintf(stderr,
-                        "main - could not allocate memory for bitmap\n");
-                return (0);
-            }
-
-            if (xres % nthread != 0 || nthread > MAX_THREAD) {
-                fprintf(stderr,
-                        "main - number of threads must be a multiple of xres and no greater than %d\n",
-                        MAX_THREAD);
-                return (0);
-            }
-
             type = MANDEL;
-
-            for (it = 0; it < nthread; ++it) {
-                xs[it] = it;
-                if ((rc = pthread_create(&thr[it], NULL, _generate, &xs[it]))) {
-                    fprintf(stderr, "main - error: pthread_create, rc: %d\n",
-                            rc);
-                    return (0);
-                }
-            }
-
-            for (it = 0; it < nthread; ++it) {
-                pthread_join(thr[it], NULL);
+            if (!fractal()) {
+                return (0);
             }
             break;
 
@@ -387,33 +394,9 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
                 sscanf(args[1], "%lg", &cx);
             if (argn > 2)
                 sscanf(args[2], "%lg", &cy);
-            if (!open_buffer()) {
-                close_buffer();
-                fprintf(stderr,
-                        "main - could not allocate memory for bitmap\n");
-                return (0);
-            }
-
-            if (xres % nthread != 0 || nthread > MAX_THREAD) {
-                fprintf(stderr,
-                        "main - number of threads must be a multiple of xres and no greater than %d\n",
-                        MAX_THREAD);
-                return (0);
-            }
-
             type = JULIA;
-
-            for (it = 0; it < nthread; ++it) {
-                xs[it] = it;
-                if ((rc = pthread_create(&thr[it], NULL, _generate, &xs[it]))) {
-                    fprintf(stderr, "main - error: pthread_create, rc: %d\n",
-                            rc);
-                    return (0);
-                }
-            }
-
-            for (it = 0; it < nthread; ++it) {
-                pthread_join(thr[it], NULL);
+            if (!fractal()) {
+                return (0);
             }
             break;
 
