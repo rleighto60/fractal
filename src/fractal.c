@@ -117,27 +117,25 @@ UBYTE get_color(int iter, int i) {
     return palette[i][k] + (palette[i][j] - palette[i][k]) * f;
 }
 
-int iterate_mandel(double vx, double vy) {
+int iterate_mandel(double complex v) {
     int iter = 0;
-    double x = 0.0, y = 0.0, xtemp;
+    double complex z, z2 = 0.0;
 
-    while (x * x + y * y <= escape && iter < maxIter) {
-        xtemp = x * x - y * y + vx;
-        y = 2 * x * y + vy;
-        x = xtemp;
+    while (creal(z2) <= escape && iter < maxIter) {
+        z = z2 + v;
+        z2 = z * z;
         iter++;
     }
     return iter;
 }
 
-int iterate_julia(double x, double y) {
+int iterate_julia(double complex z) {
     int iter = 0;
-    double xtemp;
+    double complex z2 = z * z;
 
-    while (x * x + y * y <= escape && iter < maxIter) {
-        xtemp = x * x - y * y + cx;
-        y = 2 * x * y + cy;
-        x = xtemp;
+    while (creal(z2) <= escape && iter < maxIter) {
+        z = z2 + c;
+        z2 = z * z;
         iter++;
     }
     return iter;
@@ -145,6 +143,7 @@ int iterate_julia(double x, double y) {
 
 int generate_fractal1(int x1) {
     double dx, dy, x, y;
+    double complex z;
     int iter, bpos;
     UBYTE rc, gc, bc;
 
@@ -161,14 +160,15 @@ int generate_fractal1(int x1) {
         for (int px = x1; px < xres; px += nthread) {
             bpos = xres * py + px;
             x = xc + dx * (((double) px / xres) - 0.5);
+            z = x + y * I;
             iter = maxIter;
 
             switch (type) {
             case MANDEL:
-                iter = iterate_mandel(x, y);
+                iter = iterate_mandel(z);
                 break;
             case JULIA:
-                iter = iterate_julia(x, y);
+                iter = iterate_julia(z);
                 break;
             }
             rc = get_color(iter, 0);
@@ -248,8 +248,7 @@ void reset() {
     yres = 200L;
     xc = -0.75;
     yc = 0.0;
-    cx = 0.0;
-    cy = 0.0;
+    c = 0.0;
     size = 2.5;
     escape = 4.0;
     dmax = 100;
@@ -390,10 +389,13 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
          result:  none
          *******************************************************************************/
         case 4:
+            double cx = 0.0, cy = 0.0;
+
             if (argn > 1)
                 sscanf(args[1], "%lg", &cx);
             if (argn > 2)
                 sscanf(args[2], "%lg", &cy);
+            c = cx + cy * I;
             type = JULIA;
             if (!fractal()) {
                 return (0);

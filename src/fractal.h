@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 
+#include <complex.h>
 #include <ctype.h>
 #include <malloc.h>
 #include <pthread.h>
@@ -49,7 +50,8 @@ APIRET APIENTRY handler( PRXSTRING, PUSHORT, PRXSTRING);
 
 char hostname[] = "FRACTAL";
 
-double cx, cy, xc, yc, size, escape = 4.0;
+double xc, yc, size, escape;
+double complex c;
 unsigned int mask = 0, type = MANDEL;
 int pipe = FALSE, ncolor = 2, shift = 0, maxIter = 1000, dmax = 100, nthread = 1;
 long xres, yres;
