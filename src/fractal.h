@@ -48,11 +48,14 @@ APIRET APIENTRY handler( PRXSTRING, PUSHORT, PRXSTRING);
 #define MANDEL     1
 #define JULIA      2
 
+#define REAL       1
+#define IMAG       2
+
 char hostname[] = "FRACTAL";
 
 double xc, yc, size, escape;
 double complex c;
-unsigned int mask = 0, type = MANDEL;
+unsigned int mask = 0, type = MANDEL, ctype = 0;
 int pipe = FALSE, ncolor = 2, shift = 0, maxIter = 1000, dmax = 100, nthread = 1;
 long xres, yres;
 UBYTE *rbuf, *gbuf, *bbuf;

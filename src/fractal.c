@@ -117,13 +117,26 @@ UBYTE get_color(int iter, int i) {
     return palette[i][k] + (palette[i][j] - palette[i][k]) * f;
 }
 
+double crad2(double complex z) {
+    switch (ctype) {
+    case REAL:
+        return creal(z * z);
+    case IMAG:
+        return cimag(z * z);
+    default:
+        double x = creal(z);
+        double y = cimag(z);
+        return x * x + y * y;
+    }
+    return creal(z);
+}
+
 int iterate_mandel(double complex v) {
     int iter = 0;
-    double complex z, z2 = 0.0;
+    double complex z = 0.0;
 
-    while (creal(z2) <= escape && iter < maxIter) {
-        z = z2 + v;
-        z2 = z * z;
+    while (crad2(z) <= escape && iter < maxIter) {
+        z = z * z + v;
         iter++;
     }
     return iter;
@@ -131,11 +144,9 @@ int iterate_mandel(double complex v) {
 
 int iterate_julia(double complex z) {
     int iter = 0;
-    double complex z2 = z * z;
 
-    while (creal(z2) <= escape && iter < maxIter) {
-        z = z2 + c;
-        z2 = z * z;
+    while (crad2(z) <= escape && iter < maxIter) {
+        z = z * z + c;
         iter++;
     }
     return iter;
@@ -258,6 +269,7 @@ void reset() {
     ncolor = 2;
     shift = 0;
     type = MANDEL;
+    ctype = 0;
 }
 
 #define MAXARG 80
@@ -377,6 +389,8 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
          *******************************************************************************/
         case 3:
             type = MANDEL;
+            if (argn > 1)
+                sscanf(args[1], "%d", &ctype);
             if (!fractal()) {
                 return (0);
             }
@@ -395,6 +409,8 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
                 sscanf(args[1], "%lg", &cx);
             if (argn > 2)
                 sscanf(args[2], "%lg", &cy);
+            if (argn > 3)
+                sscanf(args[3], "%d", &ctype);
             c = cx + cy * I;
             type = JULIA;
             if (!fractal()) {
