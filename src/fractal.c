@@ -131,18 +131,7 @@ double crad2(double complex z) {
     return creal(z);
 }
 
-int iterate_mandel(double complex v) {
-    int iter = 0;
-    double complex z = 0.0;
-
-    while (crad2(z) <= escape && iter < maxIter) {
-        z = z * z + v;
-        iter++;
-    }
-    return iter;
-}
-
-int iterate_julia(double complex z) {
+int iterate(double complex z, double complex c) {
     int iter = 0;
 
     while (crad2(z) <= escape && iter < maxIter) {
@@ -152,7 +141,7 @@ int iterate_julia(double complex z) {
     return iter;
 }
 
-int generate_fractal1(int x1) {
+void generate_fractal(int x1) {
     double dx, dy, x, y;
     double complex z;
     int iter, bpos;
@@ -176,10 +165,10 @@ int generate_fractal1(int x1) {
 
             switch (type) {
             case MANDEL:
-                iter = iterate_mandel(z);
+                iter = iterate(0.0, z);
                 break;
             case JULIA:
-                iter = iterate_julia(z);
+                iter = iterate(z, c0);
                 break;
             }
             rc = get_color(iter, 0);
@@ -190,13 +179,12 @@ int generate_fractal1(int x1) {
             bbuf[bpos] = bc;
         }
     }
-    return 0;
 }
 
 void* _generate_fractal(void *arg) {
     int *px1 = (int*) arg;
 
-    generate_fractal1(*px1);
+    generate_fractal(*px1);
     pthread_exit(NULL);
 }
 
@@ -208,14 +196,14 @@ int fractal() {
         close_buffer();
         fprintf(stderr,
                 "main - could not allocate memory for bitmap\n");
-        return (0);
+        return 0;
     }
 
     if (xres % nthread != 0 || nthread > MAX_THREAD) {
         fprintf(stderr,
                 "main - number of threads must be a multiple of xres and no greater than %d\n",
                 MAX_THREAD);
-        return (0);
+        return 0;
     }
 
     for (it = 0; it < nthread; ++it) {
@@ -223,14 +211,14 @@ int fractal() {
         if ((rc = pthread_create(&thr[it], NULL, _generate_fractal, &xs[it]))) {
             fprintf(stderr, "main - error: pthread_create, rc: %d\n",
                     rc);
-            return (0);
+            return 0;
         }
     }
 
     for (it = 0; it < nthread; ++it) {
         pthread_join(thr[it], NULL);
     }
-    return (1);
+    return 1;
 }
 
 int spectrum() {
@@ -259,7 +247,7 @@ void reset() {
     yres = 200L;
     xc = -0.75;
     yc = 0.0;
-    c = 0.0;
+    c0 = 0.0;
     size = 2.5;
     escape = 4.0;
     dmax = 100;
@@ -384,22 +372,24 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
             break;
 
         /*******************************************************************************
-         mandel - generate mandelbrot
+         mandel(ctype) - generate mandelbrot
+         where:   ctype = escape type (0 = re(z^2) + im(r^2), 1 = re(z^2), 2 = im(z^2))
          result:  none
          *******************************************************************************/
         case 3:
-            type = MANDEL;
             if (argn > 1)
                 sscanf(args[1], "%d", &ctype);
+            type = MANDEL;
             if (!fractal()) {
                 return (0);
             }
             break;
 
         /*******************************************************************************
-         julia(cx,cy) - generate julia
+         julia(cx,cy,ctype) - generate julia
          where:   cx    = constant x coordinate
                   cy    = constant y coordinate
+                  ctype = escape type (0 = re(z^2) + im(r^2), 1 = re(z^2), 2 = im(z^2))
          result:  none
          *******************************************************************************/
         case 4:
@@ -411,7 +401,7 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
                 sscanf(args[2], "%lg", &cy);
             if (argn > 3)
                 sscanf(args[3], "%d", &ctype);
-            c = cx + cy * I;
+            c0 = cx + cy * I;
             type = JULIA;
             if (!fractal()) {
                 return (0);

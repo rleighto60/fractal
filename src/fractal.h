@@ -6,14 +6,15 @@
  */
 
 #include <stdio.h>
-
 #include <complex.h>
 #include <ctype.h>
 #include <malloc.h>
 #include <pthread.h>
 #include <string.h>
+
 #define FALSE 0
 #define TRUE 1
+
 typedef unsigned char UBYTE;
 typedef unsigned short UWORD;
 typedef unsigned long ULONG;
@@ -24,9 +25,10 @@ typedef char *STRPTR;
 #define INCL_RXSHV
 #define INCL_RXFUNC
 #define ULONG_TYPEDEFED
+
 #include <rexxsaa.h>
 
-#define MAX_THREAD 10
+#define MAX_THREAD 64
 #define MAX_COLOR 50
 
 SHVBLOCK result = {
@@ -54,7 +56,7 @@ APIRET APIENTRY handler( PRXSTRING, PUSHORT, PRXSTRING);
 char hostname[] = "FRACTAL";
 
 double xc, yc, size, escape;
-double complex c;
+double complex c0;
 unsigned int mask = 0, type = MANDEL, ctype = 0;
 int pipe = FALSE, ncolor = 2, shift = 0, maxIter = 1000, dmax = 100, nthread = 1;
 long xres, yres;
