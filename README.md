@@ -2,7 +2,7 @@
 
 ![intro](julia.jpg)
 
-![julia.rexx](test/julia.rexx)
+![julia.rexx](julia.rexx)
 
 ## Introduction
 
