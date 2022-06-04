@@ -1,0 +1,442 @@
+#LyX 2.3 created this file. For more info see http://www.lyx.org/
+\lyxformat 544
+\begin_document
+\begin_header
+\save_transient_properties true
+\origin unavailable
+\textclass article
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman "times" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
+\font_default_family rmdefault
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100 100
+\font_tt_scale 100 100
+\use_microtype false
+\use_dash_ligatures true
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\spacing single
+\use_hyperref true
+\pdf_bookmarks true
+\pdf_bookmarksnumbered false
+\pdf_bookmarksopen false
+\pdf_bookmarksopenlevel 1
+\pdf_breaklinks false
+\pdf_pdfborder true
+\pdf_colorlinks true
+\pdf_backref false
+\pdf_pdfusetitle true
+\papersize default
+\use_geometry true
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
+\cite_engine basic
+\cite_engine_type default
+\biblio_style plain
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\justification true
+\use_refstyle 1
+\use_minted 0
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\leftmargin 1in
+\topmargin 1in
+\rightmargin 1in
+\bottommargin 1in
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation skip
+\defskip medskip
+\is_math_indent 0
+\math_numbering_side default
+\quotes_style english
+\dynamic_quotes 0
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Title
+FRACTAL GENERATOR
+\end_layout
+
+\begin_layout Standard
+This program is not public domain.
+ It may not be distributed, sold or used in any commercial software without
+ prior consent.
+\end_layout
+
+\begin_layout Standard
+Copyright 2022 by Russell Leighton
+\end_layout
+
+\begin_layout Standard
+\begin_inset CommandInset toc
+LatexCommand tableofcontents
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Section
+Introduction:
+\end_layout
+
+\begin_layout Standard
+This implementation of a fractal generation algorithm, while not unique,
+ does represent an attempt to keep it simple and efficient.
+ The focus is on computation using complex data types and parallelization,
+ along with an embedded macro language, to provide a simple but flexible
+ capability to produce fractal images.
+ Output is provided in a simple, standard portable bitmap format that can
+ be piped to appropriate translation utilities to produce images files,
+ avoiding the need to implement support for any specific output format.
+\end_layout
+
+\begin_layout Standard
+The algorithm used in this implementation is focused on the Mandelbrot set
+ and related Julia sets arising from the iterative solution of the simple
+ equation 
+\begin_inset Formula $z=z^{2}+c$
+\end_inset
+
+ where 
+\begin_inset Formula $z$
+\end_inset
+
+ and 
+\begin_inset Formula $c$
+\end_inset
+
+ are complex numbers (
+\begin_inset Formula $c=[a+bi]$
+\end_inset
+
+ where 
+\begin_inset Formula $i^{2}=-1$
+\end_inset
+
+).
+ The Mandelbrot set is defined as the set of complex numbers 
+\begin_inset Formula $c$
+\end_inset
+
+ for which the function 
+\begin_inset Formula $z=z^{2}+c$
+\end_inset
+
+ does not diverge to infinity with an initial value 
+\begin_inset Formula $z_{0}=0$
+\end_inset
+
+.
+ The rate at which values of 
+\begin_inset Formula $z$
+\end_inset
+
+ diverge can be visualized by assigning a color, based on the iteration
+ count 
+\begin_inset Formula $n$
+\end_inset
+
+ that occurs when the absolute value of 
+\begin_inset Formula $z$
+\end_inset
+
+ exceeds the escape value 
+\begin_inset Formula $2$
+\end_inset
+
+ (i.e., 
+\begin_inset Formula $|z_{n}|>2$
+\end_inset
+
+), to an image pixel placed at a coordinate derived from the real and imaginary
+ parts of 
+\begin_inset Formula $c$
+\end_inset
+
+.
+ An iteration count that exceeds a threshold, without 
+\begin_inset Formula $|z|$
+\end_inset
+
+ exceeding the escape value, implies that the assigned value of 
+\begin_inset Formula $c$
+\end_inset
+
+ is a 
+\begin_inset Quotes eld
+\end_inset
+
+likely
+\begin_inset Quotes erd
+\end_inset
+
+ candidate for inclusion in the Mandelbrot set.
+ The resulting 
+\begin_inset Quotes eld
+\end_inset
+
+fractal
+\begin_inset Quotes erd
+\end_inset
+
+ visualization is in fact a graphical depiction of the rate of divergence
+ of 
+\begin_inset Formula $z$
+\end_inset
+
+ for all values of 
+\begin_inset Formula $c$
+\end_inset
+
+ in the defined view, that are by definition, not part of the Mandelbrot
+ set.
+\end_layout
+
+\begin_layout Standard
+In contrast, a Julia set is defined as the set of initial values of 
+\begin_inset Formula $z_{0}$
+\end_inset
+
+ for which the function 
+\begin_inset Formula $z=z^{2}+c$
+\end_inset
+
+ does not diverge to infinity for a constant static value of 
+\begin_inset Formula $c$
+\end_inset
+
+.
+ For initial values of 
+\begin_inset Formula $z$
+\end_inset
+
+ that diverge, the resulting iteration count is visualized using a image
+ color value assigned to the pixel at the coordinate derived from the real
+ and imaginary parts of 
+\begin_inset Formula $z_{0}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+If the specified number of threads defined is greater than 1 then image
+ computation will be allocated to each thread in column sequence for the
+ most equitable and efficient division of computational resources.
+ Hopefully, it is obvious that the number of threads specified should be
+ equal to or less than the available hardware cores or hyper threads.
+\end_layout
+
+\begin_layout Section
+Usage:
+\end_layout
+
+\begin_layout Standard
+From command shell type:
+\end_layout
+
+\begin_layout Standard
+-> fractal [rexx script file]
+\end_layout
+
+\begin_layout Subsection
+Embedded REXX Macro Language
+\end_layout
+
+\begin_layout Standard
+This version of Fractal registers itself as an embedded Rexx interpreter
+ which will process commands not directly understood by the Rexx macro processor.
+ This effectively adds all the capabilities of the Rexx macro language to
+ Fractal program macros.
+\end_layout
+
+\begin_layout Section
+Command Reference:
+\end_layout
+
+\begin_layout Subsection
+reset(XRES, YRES, MAXITER, NTHREAD)
+\end_layout
+
+\begin_layout Standard
+This command resets the image resolution, maximum number of iterations,
+ and number of allocated threads.
+ The resolution (XRES, YRES) defines the screen resolution of the generated
+ image.
+ 
+\end_layout
+
+\begin_layout Standard
+An example of this command is:
+\end_layout
+
+\begin_layout LyX-Code
+reset(1600, 1200, 4000, 4)
+\end_layout
+
+\begin_layout Subsection
+palette(DMAX, SHIFT, COLORS...)
+\end_layout
+
+\begin_layout Standard
+This command sets the palette of color spectrum to the defined set of colors,
+ with the gradient between color values defined by the DMAX parameter (number
+ of color gradient values between defined color values).
+ The SHIFT value defines the starting color value with zero (0) specifying
+ the first color value.
+ If the iteration value exceeds the maximum color value (number of colors
+ multiplied by DMAX) then the color selected will cycle through the color
+ spectrum starting with the first color value.
+\end_layout
+
+\begin_layout Standard
+An example of this command is:
+\end_layout
+
+\begin_layout LyX-Code
+palette(64, 2, 070f19, 7B98F1, 010015, 2D62F3, 22010b, 4FDCE5)
+\end_layout
+
+\begin_layout Subsection
+view(XC, YC, SIZE)
+\end_layout
+
+\begin_layout Standard
+This command defines the fractal view center coordinates and size.
+\end_layout
+
+\begin_layout Standard
+An example of this command is:
+\end_layout
+
+\begin_layout LyX-Code
+view(0.0, 0.0, 2.6)
+\end_layout
+
+\begin_layout Subsection
+mandel(CTYPE)
+\end_layout
+
+\begin_layout Standard
+An example of this command is:
+\end_layout
+
+\begin_layout LyX-Code
+mandel(0)
+\end_layout
+
+\begin_layout Subsection
+julia(CX, CY, CTYPE)
+\end_layout
+
+\begin_layout Standard
+An example of this command is:
+\end_layout
+
+\begin_layout LyX-Code
+julia(0.355534, -0.337292, 1)
+\end_layout
+
+\begin_layout Subsection
+spectrum
+\end_layout
+
+\begin_layout Standard
+An example of this command is:
+\end_layout
+
+\begin_layout LyX-Code
+spectrum
+\end_layout
+
+\begin_layout Subsection
+save(FILENAME)
+\end_layout
+
+\begin_layout Standard
+This command will save a generated image to a file.
+\end_layout
+
+\begin_layout Standard
+The FILENAME argument specifies a file to save the resulting image to.
+ The file output will be in portable bit map (PBM) format.
+ If the file name begins with a pipe ('|') then the output will be provided
+ as a standard input stream to the specified process.
+\end_layout
+
+\begin_layout Standard
+An example of this command is:
+\end_layout
+
+\begin_layout LyX-Code
+save(|pnmtojpeg -quality 90 > output.jpg)
+\end_layout
+
+\begin_layout Section
+Example
+\end_layout
+
+\begin_layout LyX-Code
+* macro for Fractal */
+\end_layout
+
+\begin_layout LyX-Code
+reset 3200 2400 4000 4
+\end_layout
+
+\begin_layout LyX-Code
+view 0.0 0.0 2.6
+\end_layout
+
+\begin_layout LyX-Code
+julia 0.355534 '-0.337292' 1
+\end_layout
+
+\begin_layout LyX-Code
+'save(|pnmtojpeg -quality 90 > julia.jpg)'
+\end_layout
+
+\begin_layout LyX-Code
+exit 
+\end_layout
+
+\end_body
+\end_document
