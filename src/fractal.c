@@ -405,11 +405,11 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
             break;
 
         /*******************************************************************************
-         fractal(type,ctype,cx,cy) - generate fractal (julia if c0 = cx + cy I defined)
-         where:   type = 0 (MANDEL)
-                  ctype = escape type (0 = re(z^2) + im(r^2), 1 = re(z^2), 2 = im(z^2))
+         fractal(type,[cx,cy,]ctype) - generate fractal (julia if c0 = cx + cy I defined)
+         where:   type  = 0 (MANDEL)
                   cx    = constant x coordinate
                   cy    = constant y coordinate
+                  ctype = escape type (0 = re(z^2) + im(r^2), 1 = re(z^2), 2 = im(z^2))
          result:  none
          *******************************************************************************/
         case 3:
@@ -417,15 +417,16 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
 
             if (argn > 1)
                 sscanf(args[1], "%d", &type);
-            if (argn > 2)
-                sscanf(args[2], "%d", &ctype);
-            if (argn > 4) {
-                sscanf(args[3], "%lg", &cx);
-                sscanf(args[4], "%lg", &cy);
+            if (argn > 3) {
+                sscanf(args[2], "%lg", &cx);
+                sscanf(args[3], "%lg", &cy);
                 c0 = cx + cy * I;
                 julia = TRUE;
             } else {
             	julia = FALSE;
+            }
+            if (argn == 3 || argn == 5) {
+                sscanf(args[argn-1], "%d", &ctype);
             }
             if (type != MANDEL) {
                 fprintf(stderr,

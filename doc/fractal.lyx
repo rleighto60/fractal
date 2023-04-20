@@ -352,7 +352,26 @@ view(0.0, 0.0, 2.6)
 \end_layout
 
 \begin_layout Subsection
-mandel(CTYPE)
+fractal(TYPE, [CX, CY,] CTYPE)
+\end_layout
+
+\begin_layout Standard
+This command initiates execution of a fractal image defined by the specified
+ type (TYPE which currently only supports a value of 0 indicating the Mandelbrot
+ set), escape type (CTYPE which may be the default 0 for 
+\begin_inset Formula $re(z)^{2}+im(z)^{2}$
+\end_inset
+
+, 1 for 
+\begin_inset Formula $re(z^{2})$
+\end_inset
+
+, or 2 for 
+\begin_inset Formula $im(z^{2})$
+\end_inset
+
+), and, if specified, the Julia set defined at CX, CY.
+ 
 \end_layout
 
 \begin_layout Standard
@@ -360,19 +379,11 @@ An example of this command is:
 \end_layout
 
 \begin_layout LyX-Code
-mandel(0)
-\end_layout
-
-\begin_layout Subsection
-julia(CX, CY, CTYPE)
-\end_layout
-
-\begin_layout Standard
-An example of this command is:
+fractal(0)
 \end_layout
 
 \begin_layout LyX-Code
-julia(0.355534, -0.337292, 1)
+fractal(0, 0.355534, -0.337292)
 \end_layout
 
 \begin_layout Subsection
@@ -427,7 +438,7 @@ view 0.0 0.0 2.6
 \end_layout
 
 \begin_layout LyX-Code
-julia 0.355534 '-0.337292' 1
+fractal 0 1 0.355534 '-0.337292'
 \end_layout
 
 \begin_layout LyX-Code
