@@ -31,37 +31,26 @@ typedef char *STRPTR;
 #define MAX_THREAD 64
 #define MAX_COLOR 50
 
-SHVBLOCK result = {
-    NULL,
-    { 6, (char *)"result" },
-    { 0, NULL },
-    6,
-    320,
-    RXSHV_SYSET,
-    0
-};
-
 APIRET APIENTRY handler( PRXSTRING, PUSHORT, PRXSTRING);
+APIRET APIENTRY sqrtHandler(PSZ, ULONG, PRXSTRING, PSZ, PRXSTRING);
+APIRET APIENTRY powHandler(PSZ, ULONG, PRXSTRING, PSZ, PRXSTRING);
 
-#define RED        0x0001
-#define GREEN      0x0002
-#define BLUE       0x0004
-
-#define MANDEL     1
-#define JULIA      2
+#define MANDEL     0
 
 #define REAL       1
 #define IMAG       2
 
 char hostname[] = "FRACTAL";
 
-double xc, yc, size, escape;
+double xc, yc, size, pxc, pyc, psize;
+double escape;
 double complex c0;
-unsigned int mask = 0, type = MANDEL, ctype = 0;
-int pipe = FALSE, ncolor = 2, shift = 0, maxIter = 1000, dmax = 100, nthread = 1;
+unsigned int type = MANDEL, ctype = 0;
+int julia = FALSE, pipe = FALSE, ncolor = 2, shift = 0, maxIter = 1000, dmax = 100, nthread = 1;
 long xres, yres;
-UBYTE *rbuf, *gbuf, *bbuf;
+int *buf, *pbuf;
 UBYTE palette[3][MAX_COLOR];
 
 void *malloc();
 void *realloc();
+double pow(), sqrt();

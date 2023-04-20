@@ -42,43 +42,20 @@ int open_buffer() {
 
     buflen = xres * yres;
 
-    if (!(mask & RED)) {
-        if ((rbuf = calloc((long) buflen, 1L)) == NULL) {
-            fprintf(stderr, "main - insufficient memory!!!\n");
-            return (0);
-        }
-        mask |= RED;
-    }
-    if (!(mask & GREEN)) {
-        if ((gbuf = calloc((long) buflen, 1L)) == NULL) {
-            fprintf(stderr, "main - insufficient memory!!!\n");
-            return (0);
-        }
-        mask |= GREEN;
-    }
-    if (!(mask & BLUE)) {
-        if ((bbuf = calloc((long) buflen, 1L)) == NULL) {
-            fprintf(stderr, "main - insufficient memory!!!\n");
-            return (0);
-        }
-        mask |= BLUE;
-    }
+	if ((buf = calloc((long) buflen, sizeof(int))) == NULL) {
+		fprintf(stderr, "main - insufficient memory!!!\n");
+		return (0);
+	}
+	if ((pbuf = calloc((long) buflen, sizeof(int))) == NULL) {
+		fprintf(stderr, "main - insufficient memory!!!\n");
+		return (0);
+	}
     return (1);
 }
 
 void close_buffer() {
-    if (mask & RED) {
-        free(rbuf);
-        mask ^= RED;
-    }
-    if (mask & GREEN) {
-        free(gbuf);
-        mask ^= GREEN;
-    }
-    if (mask & BLUE) {
-        free(bbuf);
-        mask ^= BLUE;
-    }
+    free(buf);
+    free(pbuf);
 }
 
 void save_ppm(char *savefile) {
@@ -94,9 +71,9 @@ void save_ppm(char *savefile) {
     pos = 0;
     for (j = 0; j < yres; j++) {
         for (i = 0; i < xres; i++) {
-            putc(rbuf[pos], ifp);
-            putc(gbuf[pos], ifp);
-            putc(bbuf[pos], ifp);
+            putc((buf[pos] & 0xff0000) >> 16, ifp);
+            putc((buf[pos] & 0x00ff00) >> 8, ifp);
+            putc((buf[pos] & 0x0000ff), ifp);
             pos++;
         }
     }
@@ -135,48 +112,103 @@ int iterate(double complex z, double complex c) {
     int iter = 0;
 
     while (crad2(z) <= escape && iter < maxIter) {
-        z = z * z + c;
+        z = z * z + c; // type == MANDEL
         iter++;
     }
     return iter;
 }
 
+int sample_pbuf(int dx, int pos) {
+	if (pos < 0) return FALSE;
+	if (dx == 1) return (pbuf[pos] >> 24);
+	if (dx > 0) {
+		int flag = TRUE;
+		int dy = dx * xres;
+		for (int py = 0; py <= dy; py += xres) {
+			if (!(pbuf[pos + py] >> 24))
+				flag = FALSE;
+			for (int px = 1; px <= dx; px++) {
+				if (!(pbuf[pos + py + px] >> 24))
+					flag = FALSE;
+				if (!(pbuf[pos + py - px] >> 24))
+					flag = FALSE;
+				if (!(pbuf[pos - py + px] >> 24))
+					flag = FALSE;
+				if (!(pbuf[pos - py - px] >> 24))
+					flag = FALSE;
+			}
+		}
+		return flag;
+	}
+	return FALSE;
+}
+
+int get_pos(int x, int y, int d) {
+	if ((x < d) || (x > xres - d)) return -1;
+	if ((y < d) || (y > yres - d)) return -1;
+	return xres * y + x;
+}
+
 void generate_fractal(int x1) {
-    double dx, dy, x, y;
+    double dx, dy, pdx, pdy, x, y;
     double complex z;
-    int iter, bpos;
+    int iter, pos, ppos, ppx, ppy, dp;
     UBYTE rc, gc, bc;
 
     if (xres > yres) {
         dx = size * (double) xres / yres;
         dy = size;
+        if (psize >= size) {
+        	dp = (0.9999 + psize / size);
+            pdx = psize * (double) xres / yres;
+            pdy = psize;
+        }
+        else {
+        	dp = 0;
+            pdx = dx;
+            pdy = dy;
+        }
     } else {
         dx = size;
         dy = size * (double) yres / xres;
+        if (psize >= size) {
+        	dp = (0.9999 + psize / size);
+            pdx = psize;
+            pdy = psize * (double) yres / xres;
+        }
+        else {
+        	dp = 0;
+            pdx = dx;
+            pdy = dy;
+        }
     }
 
     for (int py = 0; py < yres; py++) {
         y = yc + dy * (((double) py / yres) - 0.5);
+        ppy = (double) yres * (((y - pyc) / pdy) + 0.5);
         for (int px = x1; px < xres; px += nthread) {
-            bpos = xres * py + px;
             x = xc + dx * (((double) px / xres) - 0.5);
+            ppx = (double) xres * (((x - pxc) / pdx) + 0.5);
+            ppos = get_pos(ppx, ppy, dp);
+            pos = xres * py + px;
+            if (sample_pbuf(dp, ppos)) {
+            	buf[pos] = 1 << 24;
+            	continue;
+            }
             z = x + y * I;
             iter = maxIter;
 
-            switch (type) {
-            case MANDEL:
-                iter = iterate(0.0, z);
-                break;
-            case JULIA:
-                iter = iterate(z, c0);
-                break;
+            if (julia) iter = iterate(z, c0);
+            else iter = iterate(0.0, z);
+
+            if (iter == maxIter) {
+            	buf[pos] = 1 << 24;
+            } else {
+				rc = get_color(iter, 0);
+				gc = get_color(iter, 1);
+				bc = get_color(iter, 2);
+				buf[pos] = rc << 16 | gc << 8 | bc;
             }
-            rc = get_color(iter, 0);
-            gc = get_color(iter, 1);
-            bc = get_color(iter, 2);
-            rbuf[bpos] = rc;
-            gbuf[bpos] = gc;
-            bbuf[bpos] = bc;
         }
     }
 }
@@ -192,20 +224,6 @@ int fractal() {
     int it, rc, xs[MAX_THREAD];
     pthread_t thr[MAX_THREAD];
 
-    if (!open_buffer()) {
-        close_buffer();
-        fprintf(stderr,
-                "main - could not allocate memory for bitmap\n");
-        return 0;
-    }
-
-    if (xres % nthread != 0 || nthread > MAX_THREAD) {
-        fprintf(stderr,
-                "main - number of threads must be a multiple of xres and no greater than %d\n",
-                MAX_THREAD);
-        return 0;
-    }
-
     for (it = 0; it < nthread; ++it) {
         xs[it] = it;
         if ((rc = pthread_create(&thr[it], NULL, _generate_fractal, &xs[it]))) {
@@ -218,6 +236,7 @@ int fractal() {
     for (it = 0; it < nthread; ++it) {
         pthread_join(thr[it], NULL);
     }
+    memcpy(pbuf, buf, xres * yres * sizeof(int));
     return 1;
 }
 
@@ -233,9 +252,7 @@ int spectrum() {
         bpos = px;
 
         for (int py = 0; py < yres; py++) {
-            rbuf[bpos] = rc;
-            gbuf[bpos] = gc;
-            bbuf[bpos] = bc;
+            buf[bpos] = rc << 16 | gc << 8 | bc;
             bpos += xres;
         }
     }
@@ -245,10 +262,11 @@ int spectrum() {
 void reset() {
     xres = 320L;
     yres = 200L;
-    xc = -0.75;
-    yc = 0.0;
+    xc = pxc= -0.75;
+    yc = pyc = 0.0;
     c0 = 0.0;
     size = 2.5;
+    psize = 0.0;
     escape = 4.0;
     dmax = 100;
     nthread = 1;
@@ -266,8 +284,8 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
         PRXSTRING returnstring) {
     char *args[MAXARG], *args0;
     char *icom, *ocom;
-    char commands[7][10] = { "reset", "palette", "view", "mandel", "julia", "spectrum", "save" };
-    int ncom = 7;
+    char commands[6][10] = { "reset", "palette", "view", "fractal", "spectrum", "save" };
+    int ncom = 6;
     int i, m, n, nc, argn;
 
     if (command->strptr != NULL) {
@@ -323,6 +341,18 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
                 sscanf(args[3], "%d", &maxIter);
             if (argn > 4)
                 sscanf(args[4], "%d", &nthread);
+            if (!open_buffer()) {
+                fprintf(stderr,
+                        "main - could not allocate memory for bitmap\n");
+                return 0;
+            }
+
+            if (nthread > MAX_THREAD) {
+                fprintf(stderr,
+                        "main - number of threads must be no greater than %d\n",
+                        MAX_THREAD);
+                return 0;
+            }
             break;
 
         /*******************************************************************************
@@ -363,6 +393,9 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
          result:  none
          *******************************************************************************/
         case 2:
+        	pxc = xc;
+        	pyc = yc;
+        	psize = size;
             if (argn > 1)
                 sscanf(args[1], "%lg", &xc);
             if (argn > 2)
@@ -372,47 +405,47 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
             break;
 
         /*******************************************************************************
-         mandel(ctype) - generate mandelbrot
-         where:   ctype = escape type (0 = re(z^2) + im(r^2), 1 = re(z^2), 2 = im(z^2))
+         fractal(type,ctype,cx,cy) - generate fractal (julia if c0 = cx + cy I defined)
+         where:   type = 0 (MANDEL)
+                  ctype = escape type (0 = re(z^2) + im(r^2), 1 = re(z^2), 2 = im(z^2))
+                  cx    = constant x coordinate
+                  cy    = constant y coordinate
          result:  none
          *******************************************************************************/
         case 3:
-            if (argn > 1)
-                sscanf(args[1], "%d", &ctype);
-            type = MANDEL;
-            if (!fractal()) {
-                return (0);
-            }
-            break;
-
-        /*******************************************************************************
-         julia(cx,cy,ctype) - generate julia
-         where:   cx    = constant x coordinate
-                  cy    = constant y coordinate
-                  ctype = escape type (0 = re(z^2) + im(r^2), 1 = re(z^2), 2 = im(z^2))
-         result:  none
-         *******************************************************************************/
-        case 4:
             double cx = 0.0, cy = 0.0;
 
             if (argn > 1)
-                sscanf(args[1], "%lg", &cx);
+                sscanf(args[1], "%d", &type);
             if (argn > 2)
-                sscanf(args[2], "%lg", &cy);
-            if (argn > 3)
-                sscanf(args[3], "%d", &ctype);
-            c0 = cx + cy * I;
-            type = JULIA;
+                sscanf(args[2], "%d", &ctype);
+            if (argn > 4) {
+                sscanf(args[3], "%lg", &cx);
+                sscanf(args[4], "%lg", &cy);
+                c0 = cx + cy * I;
+                julia = TRUE;
+            } else {
+            	julia = FALSE;
+            }
+            if (type != MANDEL) {
+                fprintf(stderr,
+                        "main - type not supported: %d\n",
+                        type);
+                return (0);
+            }
+        	type = MANDEL;
             if (!fractal()) {
                 return (0);
             }
+        	pxc = xc;
+        	pyc = yc;
             break;
 
         /*******************************************************************************
          spectrum - view palette color spectrum
          result:  none
          *******************************************************************************/
-        case 5:
+        case 4:
             if (!open_buffer()) {
                 close_buffer();
                 fprintf(stderr,
@@ -427,11 +460,11 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
          where:   filename = the name of the file to store image in
          result:  none
          *******************************************************************************/
-        case 6:
+        case 5:
             save_ppm(args[1]);
             break;
 
-        case 7:
+        case 6:
             fprintf(stderr, "main - unknown command\n");
             break;
 
@@ -448,6 +481,48 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
     return 0;
 }
 
+APIRET APIENTRY sqrtHandler(
+   PSZ name,
+   ULONG argc,
+   PRXSTRING argv,
+   PSZ queuename,
+   PRXSTRING returnstring)
+{
+  extern double sqrt(double arg);
+  float arg, val = 0.0;
+  char strval[40];
+
+  if (argc > 0) {
+    sscanf(argv[0].strptr, "%g", &arg);
+    val = (float)sqrt((double)arg);
+  }
+  sprintf(strval, "%g", val);
+  strcpy(returnstring->strptr, strval);
+  returnstring->strlength = strlen(strval);
+  return 0L;
+}
+
+APIRET APIENTRY powHandler(
+   PSZ name,
+   ULONG argc,
+   PRXSTRING argv,
+   PSZ queuename,
+   PRXSTRING returnstring)
+{
+  double arg1, arg2, val = 0.0;
+  char strval[40];
+
+  if (argc > 1) {
+    sscanf(argv[0].strptr, "%lg", &arg1);
+    sscanf(argv[1].strptr, "%lg", &arg2);
+    val = pow(arg1, arg2);
+  }
+  sprintf(strval, "%1.28lg", val);
+  strcpy(returnstring->strptr, strval);
+  returnstring->strlength = strlen(strval);
+  return 0L;
+}
+
 int main(int argc, char *argv[]) {
     int rc = 0;
     short returnCode;
@@ -455,7 +530,9 @@ int main(int argc, char *argv[]) {
 
     if (argc > 1) {
         reset();
-        rc = RexxRegisterSubcomExe(hostname, (PFN) handler, NULL);
+        RexxRegisterSubcomExe(hostname, (PFN) handler, NULL);
+        RexxRegisterFunctionExe( "sqrt", (PFN) sqrtHandler ) ;
+        RexxRegisterFunctionExe( "pow", (PFN) powHandler ) ;
 
         Result.strlength = 200;
         Result.strptr = malloc(200);
