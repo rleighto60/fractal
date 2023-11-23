@@ -1,9 +1,8 @@
 #
-default: spectrum.jpg mandel.jpg julia.jpg
+default: spectrum.png mandel.png julia.png
 
-%.jpg: %.rexx
+%.png: %.rexx
 	../bin/fractal $<
 
 clean:
-	rm -f *.jpg
-
+	rm -f *.png

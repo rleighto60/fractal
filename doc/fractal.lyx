@@ -391,6 +391,13 @@ spectrum
 \end_layout
 
 \begin_layout Standard
+This command generates a linear image of the current defined color spectrum
+ useful in assessing possible definitions for use in fractal image generation.
+ Execution of this command will typically be followed by a 'save' command
+ to enable visual review of a defined spectrum.
+\end_layout
+
+\begin_layout Standard
 An example of this command is:
 \end_layout
 
@@ -426,7 +433,7 @@ Example
 \end_layout
 
 \begin_layout LyX-Code
-* macro for Fractal */
+/* macro for Fractal */
 \end_layout
 
 \begin_layout LyX-Code

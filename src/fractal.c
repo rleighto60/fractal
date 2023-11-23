@@ -7,6 +7,18 @@
 
 #include "fractal.h"
 
+char hostname[] = "FRACTAL";
+
+double xc, yc, size, pxc, pyc, psize;
+double escape, nfac;
+double complex c0;
+unsigned int type = MANDEL, ctype = 0;
+int julia = FALSE, pipe = FALSE, smooth = TRUE, nindex = 3, shift = 0, maxIter = 1000, nthread = 1;
+long xres, yres;
+float *buf;
+UBYTE colors[3][MAX_INDICES] = {{0x00, 0xff, 0x00}, {0x00, 0xff, 0x00}, {0x00, 0xff, 0x00}};
+int indices[MAX_INDICES] = {0, 50, 100};
+
 extern int parse(char *input, char *args[], int narg);
 
 /* Open stream. If file specification begins with '|' then open as a piped
@@ -42,11 +54,7 @@ int open_buffer() {
 
     buflen = xres * yres;
 
-	if ((buf = calloc((long) buflen, sizeof(int))) == NULL) {
-		fprintf(stderr, "main - insufficient memory!!!\n");
-		return (0);
-	}
-	if ((pbuf = calloc((long) buflen, sizeof(int))) == NULL) {
+	if ((buf = calloc((long) buflen, sizeof(float))) == NULL) {
 		fprintf(stderr, "main - insufficient memory!!!\n");
 		return (0);
 	}
@@ -55,12 +63,38 @@ int open_buffer() {
 
 void close_buffer() {
     free(buf);
-    free(pbuf);
+}
+
+UBYTE get_color(float fiter, int i) {
+    if (fiter >= maxIter)
+        return 0;
+
+    int n = nindex - 1;
+    int maxindex = indices[n];
+    float riter = fmodf(fiter + (float)shift, (float)maxindex);
+    int in, dindex;
+
+    for (in = 0; in <= n; in++) {
+        if (indices[in] > riter) break;
+    }
+    // if in the first interval or after the last then interpolate between last and first colors
+    if (in == 0 || in > n) {
+        dindex = indices[0];
+        if (dindex > 0) return (UBYTE)((float)colors[i][n] + (float)(colors[i][0] - colors[i][n]) * riter / (float) dindex);
+	    return colors[i][0];
+    }
+    // otherwise interpolate between colors at the start and end of the interval
+    else {
+        dindex = indices[in] - indices[in-1];
+        if (dindex > 0) return (UBYTE)((float)colors[i][in-1] + (float)(colors[i][in] - colors[i][in-1]) * (riter - (float)indices[in-1]) / (float) dindex);
+	    return colors[i][in];
+    }
 }
 
 void save_ppm(char *savefile) {
     FILE *ifp;
     long i, j, pos;
+    float fiter;
 
     if ((ifp = open_file(savefile, "w")) == NULL) {
         fprintf(stderr, "save - could not open file!!!\n");
@@ -71,9 +105,10 @@ void save_ppm(char *savefile) {
     pos = 0;
     for (j = 0; j < yres; j++) {
         for (i = 0; i < xres; i++) {
-            putc((buf[pos] & 0xff0000) >> 16, ifp);
-            putc((buf[pos] & 0x00ff00) >> 8, ifp);
-            putc((buf[pos] & 0x0000ff), ifp);
+        	fiter = buf[pos];
+            putc(get_color(fiter, 0), ifp);
+            putc(get_color(fiter, 1), ifp);
+            putc(get_color(fiter, 2), ifp);
             pos++;
         }
     }
@@ -81,134 +116,61 @@ void save_ppm(char *savefile) {
     close_file(ifp);
 }
 
-UBYTE get_color(int iter, int i) {
-    if (iter == maxIter)
-        return 0;
-
-    int n = (double) iter / dmax;
-    int diter = iter - n * dmax;
-    double f = 1.0 - (double) diter / dmax;
-    int j = (n + shift) % ncolor;
-    int k = j == ncolor - 1 ? 0 : j + 1;
-
-    return palette[i][k] + (palette[i][j] - palette[i][k]) * f;
-}
-
 double crad2(double complex z) {
+    double x, y;
+    if (ctype == 0 || smooth) {
+        x = creal(z);
+        y = cimag(z);
+        return x * x + y * y;
+    }
     switch (ctype) {
     case REAL:
         return creal(z * z);
     case IMAG:
         return cimag(z * z);
-    default:
-        double x = creal(z);
-        double y = cimag(z);
-        return x * x + y * y;
     }
     return creal(z);
 }
 
-int iterate(double complex z, double complex c) {
+float iterate(double complex z, double complex c) {
     int iter = 0;
+    float fiter = 0.0;
+    double r = 0.0, r2;
 
-    while (crad2(z) <= escape && iter < maxIter) {
+    while (((r2 = crad2(z)) <= escape) && iter < maxIter) {
         z = z * z + c; // type == MANDEL
+        r = r2;
         iter++;
     }
-    return iter;
-}
-
-int sample_pbuf(int dx, int pos) {
-	if (pos < 0) return FALSE;
-	if (dx == 1) return (pbuf[pos] >> 24);
-	if (dx > 0) {
-		int flag = TRUE;
-		int dy = dx * xres;
-		for (int py = 0; py <= dy; py += xres) {
-			if (!(pbuf[pos + py] >> 24))
-				flag = FALSE;
-			for (int px = 1; px <= dx; px++) {
-				if (!(pbuf[pos + py + px] >> 24))
-					flag = FALSE;
-				if (!(pbuf[pos + py - px] >> 24))
-					flag = FALSE;
-				if (!(pbuf[pos - py + px] >> 24))
-					flag = FALSE;
-				if (!(pbuf[pos - py - px] >> 24))
-					flag = FALSE;
-			}
-		}
-		return flag;
-	}
-	return FALSE;
-}
-
-int get_pos(int x, int y, int d) {
-	if ((x < d) || (x > xres - d)) return -1;
-	if ((y < d) || (y > yres - d)) return -1;
-	return xres * y + x;
+    fiter = (float) iter;
+    if (smooth && iter < maxIter) {
+    	fiter += (float)(1.0 - (double)(log((double)(log(r) / 2.0) / nfac) / nfac));
+    }
+    return fiter;
 }
 
 void generate_fractal(int x1) {
-    double dx, dy, pdx, pdy, x, y;
+    double dx, dy, x, y;
     double complex z;
-    int iter, pos, ppos, ppx, ppy, dp;
-    UBYTE rc, gc, bc;
+    int pos;
 
     if (xres > yres) {
         dx = size * (double) xres / yres;
         dy = size;
-        if (psize >= size) {
-        	dp = (0.9999 + psize / size);
-            pdx = psize * (double) xres / yres;
-            pdy = psize;
-        }
-        else {
-        	dp = 0;
-            pdx = dx;
-            pdy = dy;
-        }
     } else {
         dx = size;
         dy = size * (double) yres / xres;
-        if (psize >= size) {
-        	dp = (0.9999 + psize / size);
-            pdx = psize;
-            pdy = psize * (double) yres / xres;
-        }
-        else {
-        	dp = 0;
-            pdx = dx;
-            pdy = dy;
-        }
     }
 
     for (int py = 0; py < yres; py++) {
         y = yc + dy * (((double) py / yres) - 0.5);
-        ppy = (double) yres * (((y - pyc) / pdy) + 0.5);
         for (int px = x1; px < xres; px += nthread) {
             x = xc + dx * (((double) px / xres) - 0.5);
-            ppx = (double) xres * (((x - pxc) / pdx) + 0.5);
-            ppos = get_pos(ppx, ppy, dp);
             pos = xres * py + px;
-            if (sample_pbuf(dp, ppos)) {
-            	buf[pos] = 1 << 24;
-            	continue;
-            }
             z = x + y * I;
-            iter = maxIter;
 
-            if (julia) iter = iterate(z, c0);
-            else iter = iterate(0.0, z);
-
-            if (iter == maxIter) {
-            	buf[pos] = 1 << 24;
-            } else {
-				rc = get_color(iter, 0);
-				gc = get_color(iter, 1);
-				bc = get_color(iter, 2);
-				buf[pos] = rc << 16 | gc << 8 | bc;
-            }
+            if (julia) buf[pos] = iterate(z, c0);
+            else buf[pos] = iterate(0.0, z);
         }
     }
 }
@@ -223,6 +185,11 @@ void* _generate_fractal(void *arg) {
 int fractal() {
     int it, rc, xs[MAX_THREAD];
     pthread_t thr[MAX_THREAD];
+    pthread_attr_t attr;
+
+    /* Initialize and set thread detached attribute */
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
     for (it = 0; it < nthread; ++it) {
         xs[it] = it;
@@ -236,23 +203,20 @@ int fractal() {
     for (it = 0; it < nthread; ++it) {
         pthread_join(thr[it], NULL);
     }
-    memcpy(pbuf, buf, xres * yres * sizeof(int));
     return 1;
 }
 
 int spectrum() {
-    int iter, bpos, max = ncolor * dmax;
-    UBYTE rc, gc, bc;
+    int bpos;
+    float fiter;
+    int max = indices[nindex - 1];
 
     for (int px = 0; px < xres; px++) {
-        iter = (double) (max * px) / xres;
-        rc = get_color(iter, 0);
-        gc = get_color(iter, 1);
-        bc = get_color(iter, 2);
+        fiter = (double)(max * px) / (double) xres;
         bpos = px;
 
         for (int py = 0; py < yres; py++) {
-            buf[bpos] = rc << 16 | gc << 8 | bc;
+            buf[bpos] = fiter;
             bpos += xres;
         }
     }
@@ -267,12 +231,9 @@ void reset() {
     c0 = 0.0;
     size = 2.5;
     psize = 0.0;
-    escape = 4.0;
-    dmax = 100;
+    escape = 256.0;
+    nfac = log(2.0);
     nthread = 1;
-    palette[0][0] = palette[1][0] = palette[2][0] = 0;
-    palette[0][1] = palette[1][1] = palette[2][1] = 255;
-    ncolor = 2;
     shift = 0;
     type = MANDEL;
     ctype = 0;
@@ -286,7 +247,9 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
     char *icom, *ocom;
     char commands[6][10] = { "reset", "palette", "view", "fractal", "spectrum", "save" };
     int ncom = 6;
-    int i, m, n, nc, argn;
+    int i, m, n, nc, argn, scale;
+    unsigned int r, g, b;
+    double cx = 0.0, cy = 0.0;
 
     if (command->strptr != NULL) {
         for (i = 0; i < MAXARG; i++)
@@ -356,30 +319,32 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
             break;
 
         /*******************************************************************************
-         palette(dmax, shift, colors...) - palette
+         palette(scale, shift, {index, color}...) - palette
          where:   colors   = RGB (24 bit hexadecimal) values
          result:  none
          *******************************************************************************/
         case 1:
-            unsigned int r, g, b;
-
-            if (argn > 1)
-                sscanf(args[1], "%d", &dmax);
-            if (argn > 2)
-                sscanf(args[2], "%d", &shift);
+            if (argn > 1) {
+                sscanf(args[1], "%d", &scale);
+            }
+            if (argn > 2) {
+                sscanf(args[2], "%d", &n);
+                shift = scale * n;
+            }
             if (argn > 3) {
-                ncolor = argn - 3;
-                if (ncolor >= MAX_COLOR) {
+                nindex = (argn - 3) / 2 ;
+                if (nindex >= MAX_INDICES) {
                     fprintf(stderr,
-                            "main - number of palette colors must be less than %d\n",
-                            MAX_COLOR);
+                            "main - number of palette indices must be less than %d\n",
+                            MAX_INDICES);
                     return (0);
                 }
-                for (i = 0; i < ncolor; ++i) {
-                    if (sscanf(args[i + 3], "%2x%2x%2x", &r, &g, &b) == 3) {
-                        palette[0][i] = r;
-                        palette[1][i] = g;
-                        palette[2][i] = b;
+                for (i = 0; i < nindex; ++i) {
+                    if (sscanf(args[i*2 + 3], "%d", &n) == 1) indices[i] = scale * n;
+                    if (sscanf(args[i*2 + 4], "%2x%2x%2x", &r, &g, &b) == 3) {
+                        colors[0][i] = r;
+                        colors[1][i] = g;
+                        colors[2][i] = b;
                     }
                 }
             }
@@ -413,8 +378,6 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
          result:  none
          *******************************************************************************/
         case 3:
-            double cx = 0.0, cy = 0.0;
-
             if (argn > 1)
                 sscanf(args[1], "%d", &type);
             if (argn > 3) {
@@ -543,5 +506,6 @@ int main(int argc, char *argv[]) {
         if (rc < 0)
             rc = -rc;
     }
+    pthread_exit(NULL);
     return rc;
 }
