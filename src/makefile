@@ -4,7 +4,7 @@ CC = gcc -O3 -Wall -fomit-frame-pointer -pthread
 default: ../bin/fractal ../bin/display
 
 ../bin/fractal:	fractal.o parse.o
-	$(CC) -o ../bin/fractal fractal.o parse.o -lregina -lm -ldl
+	$(CC) -o ../bin/fractal fractal.o parse.o -lregina -lX11 -lm -ldl
 
 ../bin/display:	display.o
 	$(CC) -o ../bin/display display.o -lX11

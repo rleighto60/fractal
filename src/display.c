@@ -165,7 +165,7 @@ int ReadImage(char *fspec) {
     return (1);
 } /* end ReadPPM */
 
-void processEvent(Display *display, Window window, XImage *ximage)
+void process_event(Display *display, Window window, XImage *ximage)
 {
     XEvent ev;
     XNextEvent(display, &ev);
@@ -210,6 +210,6 @@ int main(int argc, char **argv)
     XMapWindow(display, window);
 
     while(1) {
-        processEvent(display, window, ximage);
+        process_event(display, window, ximage);
     }
 }
