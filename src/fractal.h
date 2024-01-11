@@ -16,6 +16,7 @@
 
 typedef unsigned char UBYTE;
 typedef unsigned short UWORD;
+typedef unsigned int UINT;
 typedef unsigned long ULONG;
 typedef short WORD;
 typedef char *STRPTR;
@@ -41,8 +42,7 @@ struct FDATA {
     char file[2048];
     int shift, nindex;
     int indices[MAX_INDICES];
-    UBYTE comps[3][MAX_INDICES];
-    UBYTE color[3];
+    unsigned int comps[MAX_INDICES];
 };
 
 APIRET APIENTRY handler( PRXSTRING, PUSHORT, PRXSTRING);

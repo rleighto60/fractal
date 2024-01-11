@@ -15,7 +15,7 @@ char hostname[] = "FRACTAL";
 double xc, yc, size, pxc, pyc, psize;
 double escape, nfac;
 double complex c0;
-unsigned int type = MANDEL, ctype = 0;
+UINT type = MANDEL, ctype = 0;
 int julia = FALSE, pipe = FALSE, maxIter = 1000, nthread = 1, is = 0;
 int *image;
 long xres, yres;
@@ -69,16 +69,29 @@ void close_buffer() {
     free(buf);
 }
 
-void get_color(float fiter, int nindex, int shift, int indices[MAX_INDICES], UBYTE comps[3][MAX_INDICES], UBYTE *color) {
-    int nc;
+UINT interpolate_color(UINT comp1, UINT comp2, float rf) {
+    UBYTE r1 = (UBYTE)((comp1 >> 16) & 0xff);
+    UBYTE r2 = (UBYTE)((comp2 >> 16) & 0xff);
+    UBYTE g1 = (UBYTE)((comp1 >> 8) & 0xff);
+    UBYTE g2 = (UBYTE)((comp2 >> 8) & 0xff);
+    UBYTE b1 = (UBYTE)(comp1 & 0xff);
+    UBYTE b2 = (UBYTE)(comp2 & 0xff);
+    return (UINT) ((r2 - r1) * rf + r1) << 16 |
+            (UINT) ((g2 - g1) * rf + g1) << 8 |
+            (UINT) ((b2 - b1) * rf + b1);
+}
+
+UINT get_color(float fiter, int nindex, int shift, int indices[MAX_INDICES], UINT comps[MAX_INDICES]) {
+    UINT color;
+
     if (fiter >= maxIter) {
-        for (nc = 0; nc < 3; nc++) color[nc] = 0;
+        color = 0;
     } else {
         int nlast = nindex - 1;
         float riter = fmodf(fiter + (float)shift, (float)indices[nlast]);
         float rf;
         int ni;
-        UBYTE comp1, comp2;
+        UINT comp1, comp2;
 
         for (ni = 0; ni <= nlast; ni++) {
             if (indices[ni] > riter) break;
@@ -87,41 +100,38 @@ void get_color(float fiter, int nindex, int shift, int indices[MAX_INDICES], UBY
         if (ni == 0 || ni > nlast) {
             if (indices[0] > 0) {
                 rf = riter / (float) indices[0];
-                for (nc = 0; nc < 3; nc++) {
-                    comp1 = comps[nc][nlast];
-                    comp2 = comps[nc][0];
-                    color[nc] = (UBYTE)((float)comp1 + (float)(comp2 - comp1) * rf);
-                }
+                comp1 = comps[nlast];
+                comp2 = comps[0];
+                color = interpolate_color(comp1, comp2, rf);
             } else {
-                for (nc = 0; nc < 3; nc++) color[nc] = comps[nc][0];
+                color = comps[0];
             }
         }
         // otherwise interpolate between colors at the start and end of the interval
         else {
             if (indices[ni] > indices[ni-1]) {
                 rf = (riter - (float)indices[ni-1]) / (float) (indices[ni] - indices[ni-1]);
-                for (nc = 0; nc < 3; nc++) {
-                    comp1 = comps[nc][ni-1];
-                    comp2 = comps[nc][ni];
-                    color[nc] = (UBYTE)((float)comp1 + (float)(comp2 - comp1) * rf);
-                }
+                comp1 = comps[ni-1];
+                comp2 = comps[ni];
+                color = interpolate_color(comp1, comp2, rf);
             } else {
-                for (nc = 0; nc < 3; nc++) color[nc] = comps[nc][ni];
+                color = comps[ni];
             }
         }
     }
+    return color;
 }
 
 void save_ppm(void *data) {
     FILE *ifp;
     struct FDATA *threadData;
+    UINT color;
 
     threadData = (struct FDATA *) data;
 
     if ((ifp = open_file(threadData->file, "w")) == NULL) {
         fprintf(stderr, "save - could not open file!!!\n");
     } else {
-        int nc;
         long i, j, pos = 0;
         float fiter;
 
@@ -129,8 +139,10 @@ void save_ppm(void *data) {
         for (j = 0; j < yres; j++) {
             for (i = 0; i < xres; i++) {
                 fiter = buf[pos++];
-                get_color(fiter, threadData->nindex, threadData->shift, threadData->indices, threadData->comps, threadData->color);
-                for (nc = 0; nc < 3; nc++) putc(threadData->color[nc], ifp);
+                color = get_color(fiter, threadData->nindex, threadData->shift, threadData->indices, threadData->comps);
+                putc((UBYTE)((color >> 16) & 0x0000ff) , ifp);
+                putc((UBYTE)((color >> 8) & 0x0000ff) , ifp);
+                putc((UBYTE)(color & 0x0000ff) , ifp);
             }
         }
         fflush(ifp);
@@ -242,6 +254,7 @@ void display_image(struct FDATA *data) {
     int open = TRUE;
     long i, j, pos = 0;
     float fiter;
+    UINT color;
 
     long buflen = (long) xres * yres;
 
@@ -254,8 +267,8 @@ void display_image(struct FDATA *data) {
     for (j = 0; j < yres; j++) {
         for (i = 0; i < xres; i++) {
             fiter = buf[pos++];
-            get_color(fiter, data->nindex, data->shift, data->indices, data->comps, data->color);
-            image[pos] = data->color[0] << 16 | data->color[1] << 8 | data->color[2];
+            color = get_color(fiter, data->nindex, data->shift, data->indices, data->comps);
+            image[pos] = color;
         }
     }
 
@@ -390,15 +403,9 @@ int spectrum() {
 }
 
 void init_data(struct FDATA *data) {
-    data->comps[0][0] = 0x00;
-    data->comps[0][1] = 0xff;
-    data->comps[0][2] = 0x00;
-    data->comps[1][0] = 0x00;
-    data->comps[1][1] = 0xff;
-    data->comps[1][2] = 0x00;
-    data->comps[2][0] = 0x00;
-    data->comps[2][1] = 0xff;
-    data->comps[2][2] = 0x00;
+    data->comps[0] = 0x000000;
+    data->comps[1] = 0xffffff;
+    data->comps[2] = 0x000000;
     data->indices[0] = 0;
     data->indices[1] = 50;
     data->indices[2] = 100;
@@ -429,8 +436,8 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
     char commands[6][10] = { "reset", "view", "fractal", "spectrum", "save", "display" };
     int ncom = 6;
     int i, m, n, nc, argn, scale;
-    unsigned int r, g, b;
     double cx = 0.0, cy = 0.0;
+    UINT color;
 
     if (command->strptr != NULL) {
         for (i = 0; i < MAXARG; i++)
@@ -602,10 +609,8 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
                 }
                 for (i = 0; i < saveData[is].nindex; ++i) {
                     if (sscanf(args[i*2 + 4], "%d", &n) == 1) saveData[is].indices[i] = scale * n;
-                    if (sscanf(args[i*2 + 5], "%2x%2x%2x", &r, &g, &b) == 3) {
-                        saveData[is].comps[0][i] = r;
-                        saveData[is].comps[1][i] = g;
-                        saveData[is].comps[2][i] = b;
+                    if (sscanf(args[i*2 + 5], "%6x", &color) == 1) {
+                        saveData[is].comps[i] = color;
                     }
                 }
             }
@@ -646,10 +651,8 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
                 }
                 for (i = 0; i < saveData[0].nindex; ++i) {
                     if (sscanf(args[i*2 + 3], "%d", &n) == 1) saveData[0].indices[i] = scale * n;
-                    if (sscanf(args[i*2 + 4], "%2x%2x%2x", &r, &g, &b) == 3) {
-                        saveData[0].comps[0][i] = r;
-                        saveData[0].comps[1][i] = g;
-                        saveData[0].comps[2][i] = b;
+                    if (sscanf(args[i*2 + 4], "%6x", &color) == 1) {
+                        saveData[0].comps[i] = color;
                     }
                 }
             }
