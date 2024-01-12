@@ -42,7 +42,7 @@ struct FDATA {
     char file[2048];
     int shift, nindex;
     int indices[MAX_INDICES];
-    unsigned int comps[MAX_INDICES];
+    UINT comps[MAX_INDICES];
 };
 
 APIRET APIENTRY handler( PRXSTRING, PUSHORT, PRXSTRING);

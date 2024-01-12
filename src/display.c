@@ -1,5 +1,10 @@
 #include "display.h"
 
+int xres, yres;
+int *buf;
+int isPipe = FALSE;
+static cairo_surface_t *surface = NULL;
+
 char pgetc(FILE *file) {
     int ich;
     char ch;
@@ -44,39 +49,39 @@ int getint(FILE *file) {
 /* Open stream. If file specification begins with '|' then open as a piped
  stream otherwise open as a file */
 
-FILE *Open(char *fspec, char *mode) {
+FILE* open_file(char *fspec, char *mode) {
     if (*fspec == '|') {
         ++fspec;
-        pipe = TRUE;
+        isPipe = TRUE;
         return popen(fspec, mode);
     } else {
-        pipe = FALSE;
+        isPipe = FALSE;
         return fopen(fspec, mode);
     }
 }
 
 /* Close stream. */
 
-int Close(FILE *stream) {
+int close_file(FILE *stream) {
     int rc = 0;
 
-    if (pipe)
+    if (isPipe)
         rc = pclose(stream);
     else
         rc = fclose(stream);
-    pipe = FALSE;
+    isPipe = FALSE;
 
     return rc;
 }
 
-int ReadImage(char *fspec) {
+int read_ppm(char *fspec) {
     FILE *fp;
     int i, j, n, pos, max;
     long ich1, ich2, id, buflen;
     UBYTE rc, gc, bc;
 
     if (fspec != 0) {
-		if ((fp = Open(fspec, "r")) == NULL) {
+		if ((fp = open_file(fspec, "r")) == NULL) {
 			fprintf(stderr, "read - could not open map!!!\n");
 			return (0);
 		}
@@ -87,25 +92,25 @@ int ReadImage(char *fspec) {
     ich1 = (long) fgetc(fp);
     if (ich1 == EOF) {
         fprintf(stderr, "read - premature EOF reading magic number\n");
-        Close(fp);
+        close_file(fp);
         return (0);
     }
     ich2 = (long) fgetc(fp);
     if (ich2 == EOF) {
         fprintf(stderr, "read - premature EOF reading magic number\n");
-        Close(fp);
+        close_file(fp);
         return (0);
     }
     id = ich1 * 256L + ich2;
     if ((id != PGM_FORMAT) && (id != RPGM_FORMAT) && (id != PPM_FORMAT)
             && (id != RPPM_FORMAT)) {
         fprintf(stderr, "read - not a PPM or PGM file!!!\n");
-        Close(fp);
+        close_file(fp);
         return (0);
     }
 
-    Width = (int) getint(fp);
-    Height = (int) getint(fp);
+    xres = (int) getint(fp);
+    yres = (int) getint(fp);
 
     max = getint(fp);
     i = 256 / (max + 1);
@@ -115,30 +120,30 @@ int ReadImage(char *fspec) {
         i >>= 1;
     }
 
-    buflen = (long) Width * Height;
+    buflen = (long) xres * yres;
 	if ((buf = calloc((long) buflen, sizeof(int))) == NULL) {
 		fprintf(stderr, "main - insufficient memory!!!\n");
 		return (0);
 	}
     pos = 0;
-    for (i = 0; i < Height; i++) { /* process n lines/screen */
+    for (i = 0; i < yres; i++) { /* process n lines/screen */
         switch (id) {
         case PGM_FORMAT:
-            for (j = 0; j < Width; j++) {
+            for (j = 0; j < xres; j++) {
             	rc = gc = bc = (UBYTE) (getint(fp) << n);
 				buf[pos] = rc << 16 | gc << 8 | bc;
                 pos++;
             }
             break;
         case RPGM_FORMAT:
-            for (j = 0; j < Width; j++) {
+            for (j = 0; j < xres; j++) {
             	rc = gc = bc = (UBYTE) (fgetc(fp) << n);
 				buf[pos] = rc << 16 | gc << 8 | bc;
                 pos++;
             }
             break;
         case PPM_FORMAT:
-            for (j = 0; j < Width; j++) {
+            for (j = 0; j < xres; j++) {
             	rc = (UBYTE) (getint(fp) << n);
             	gc = (UBYTE) (getint(fp) << n);
             	bc = (UBYTE) (getint(fp) << n);
@@ -147,7 +152,7 @@ int ReadImage(char *fspec) {
             }
             break;
         case RPPM_FORMAT:
-            for (j = 0; j < Width; j++) {
+            for (j = 0; j < xres; j++) {
                 rc = (UBYTE) (fgetc(fp) << n);
                 gc = (UBYTE) (fgetc(fp) << n);
                 bc = (UBYTE) (fgetc(fp) << n);
@@ -161,55 +166,57 @@ int ReadImage(char *fspec) {
     while ((long) fgetc(fp) != EOF)
         ;
 
-    Close(fp);
+    close_file(fp);
     return (1);
 } /* end ReadPPM */
 
-void process_event(Display *display, Window window, XImage *ximage)
-{
-    XEvent ev;
-    XNextEvent(display, &ev);
-    switch(ev.type)
-    {
-    case Expose:
-        XPutImage(display, window, DefaultGC(display, 0), ximage, 0, 0, 0, 0, Width, Height);
-        break;
-    case ButtonPress:
-    	printf("%d\n", ev.xbutton.x);
-    	printf("%d\n", ev.xbutton.y);
-    	printf("%d\n", ev.xbutton.button);
-        exit(0);
-    }
+static void draw_function(GtkDrawingArea *area, cairo_t *cr, int width, int height, gpointer user_data) {
+    cairo_set_source_surface(cr, surface, 0, 0);
+    cairo_paint(cr);
 }
+
+static void close_window (GtkWindow *win)
+{
+    if (buf) free(buf);
+    if (surface) cairo_surface_destroy (surface);
+    gtk_window_close (win);
+}
+
+static void activate(GApplication *app, gpointer data) {
+    GtkWidget *win = gtk_application_window_new(GTK_APPLICATION(app));
+    GtkWidget *area = gtk_drawing_area_new();
+
+    g_signal_connect (win, "destroy", G_CALLBACK (close_window), win);
+
+    int stride = cairo_format_stride_for_width(CAIRO_FORMAT_RGB24, xres);
+    surface = cairo_image_surface_create_for_data((UBYTE *) buf, CAIRO_FORMAT_RGB24, xres, yres, stride);
+
+    gtk_window_set_title(GTK_WINDOW(win), "fractal");
+    gtk_window_set_default_size (GTK_WINDOW (win), xres, yres);
+    gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(area), draw_function, NULL, NULL);
+    gtk_window_set_child(GTK_WINDOW(win), area);
+
+    gtk_window_present(GTK_WINDOW(win));
+}
+
+#define APPLICATION_ID "org.rl8n.display"
 
 int main(int argc, char **argv)
 {
-    XImage *ximage;
-    Display *display = XOpenDisplay(NULL);
-    Visual *visual = DefaultVisual(display, 0);
-
+    GtkApplication *app;
     char *input;
-
-    if (visual->class!=TrueColor) {
-        fprintf(stderr, "Cannot handle non true color visual ...\n");
-        exit(1);
-    }
 
     if (argc > 1) input = argv[1];
     else input = 0;
 
-    if (!ReadImage(input)) {
+    if (!read_ppm(input)) {
         free(buf);
         fprintf(stderr, "main - error reading image!!!\n");
+        return 0;
     }
 
-    Window window = XCreateSimpleWindow(display, RootWindow(display, 0), 0, 0, Width, Height, 1, 0, 0);
-
-    ximage = XCreateImage(display, visual, DefaultDepth(display,DefaultScreen(display)), ZPixmap, 0, (char *)buf, Width, Height, 32, 0);
-    XSelectInput(display, window, ButtonPressMask|ExposureMask);
-    XMapWindow(display, window);
-
-    while(1) {
-        process_event(display, window, ximage);
-    }
+    app = gtk_application_new(APPLICATION_ID, G_APPLICATION_DEFAULT_FLAGS);
+    g_signal_connect(app, "activate", G_CALLBACK (activate), NULL);
+    g_application_run(G_APPLICATION(app), 0, NULL);
+    g_object_unref(app);
 }

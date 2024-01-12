@@ -19,7 +19,7 @@ UINT type = MANDEL, ctype = 0;
 int julia = FALSE, pipe = FALSE, maxIter = 1000, nthread = 1, is = 0;
 int *image;
 long xres, yres;
-float *buf;
+float *buf, *pbuf;
 struct FDATA saveData[MAX_THREAD];
 pthread_t thr[MAX_THREAD];
 
@@ -62,11 +62,16 @@ int open_buffer() {
 		fprintf(stderr, "main - insufficient memory!!!\n");
 		return (0);
 	}
+    if ((pbuf = calloc((long) buflen, sizeof(float))) == NULL) {
+        fprintf(stderr, "main - insufficient memory!!!\n");
+        return (0);
+    }
     return (1);
 }
 
 void close_buffer() {
     free(buf);
+    free(pbuf);
 }
 
 UINT interpolate_color(UINT comp1, UINT comp2, float rf) {
@@ -84,7 +89,7 @@ UINT interpolate_color(UINT comp1, UINT comp2, float rf) {
 UINT get_color(float fiter, int nindex, int shift, int indices[MAX_INDICES], UINT comps[MAX_INDICES]) {
     UINT color;
 
-    if (fiter >= maxIter) {
+    if (fiter < 0.0) {
         color = 0;
     } else {
         int nlast = nindex - 1;
@@ -323,31 +328,104 @@ float iterate(double complex z, double complex c) {
         r = r2;
         iter++;
     }
-    fiter = (float) iter;
-    if (!julia && ctype == 0 && iter < maxIter) {
-    	fiter += (float)(1.0 - (double)(log((double)(log(r) / 2.0) / nfac) / nfac));
+    if (iter < maxIter) {
+        fiter = (float) iter;
+        if (!julia && ctype == 0) {
+            fiter += (float)(1.0 - (double)(log((double)(log(r) / 2.0) / nfac) / nfac));
+        }
+        return fiter;
     }
-    return fiter;
+    return -1.0;
+}
+
+/*
+ * Get interpolated position.
+ *
+ * - cr Current resolution
+ * - cc Current coordinate
+ * - pc Prior center
+ * - pw Prior distance
+ */
+int interpolated_position(long cr, double cc, double pc, double pd) {
+    return (double) cr * (((cc - pc) / pd) + 0.5);
+}
+
+int sample_pbuf(int dx, int pos) {
+    if (pos < 0) return FALSE;
+    if (dx == 1) return (pbuf[pos] < 0.0);
+    if (dx > 0) {
+        int flag = TRUE;
+        int dy = dx * xres;
+        for (int py = 0; py <= dy; py += xres) {
+            if (!(pbuf[pos + py] < 0.0))
+                flag = FALSE;
+            for (int px = 1; px <= dx; px++) {
+                if (!(pbuf[pos + py + px] < 0.0))
+                    flag = FALSE;
+                if (!(pbuf[pos + py - px] < 0.0))
+                    flag = FALSE;
+                if (!(pbuf[pos - py + px] < 0.0))
+                    flag = FALSE;
+                if (!(pbuf[pos - py - px] < 0.0))
+                    flag = FALSE;
+            }
+        }
+        return flag;
+    }
+    return FALSE;
+}
+
+int get_pos(int x, int y, int d) {
+    if ((x < d) || (x > xres - d)) return -1;
+    if ((y < d) || (y > yres - d)) return -1;
+    return xres * y + x;
 }
 
 void generate_fractal(int x1) {
-    double dx, dy, x, y;
+    double dx, dy, pdx, pdy,  x, y;
     double complex z;
-    int pos;
+    int pos, ppos, ppx, ppy, dp;
 
     if (xres > yres) {
         dx = size * (double) xres / yres;
         dy = size;
+        if (psize >= size) {
+            dp = (0.9999 + psize / size);
+            pdx = psize * (double) xres / yres;
+            pdy = psize;
+        }
+        else {
+            dp = 0;
+            pdx = dx;
+            pdy = dy;
+        }
     } else {
         dx = size;
         dy = size * (double) yres / xres;
+        if (psize >= size) {
+            dp = (0.9999 + psize / size);
+            pdx = psize;
+            pdy = psize * (double) yres / xres;
+        }
+        else {
+            dp = 0;
+            pdx = dx;
+            pdy = dy;
+        }
     }
 
     for (int py = 0; py < yres; py++) {
         y = yc + dy * (((double) py / yres) - 0.5);
+        ppy = interpolated_position(yres, y, pyc, pdy);
         for (int px = x1; px < xres; px += nthread) {
             x = xc + dx * (((double) px / xres) - 0.5);
+            ppx = interpolated_position(xres, x, pxc, pdx);
             pos = xres * py + px;
+            ppos = get_pos(ppx, ppy, 0);
+            if (sample_pbuf(dp, ppos)) {
+                buf[pos] = -1.0;
+                continue;
+            }
             z = x + y * I;
 
             if (julia) buf[pos] = iterate(z, c0);
@@ -383,6 +461,7 @@ int fractal() {
     for (it = 0; it < nthread; ++it) {
         pthread_join(thr[it], NULL);
     }
+    memcpy(pbuf, buf, xres * yres * sizeof(float));
     return 1;
 }
 
