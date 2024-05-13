@@ -4,5 +4,5 @@ reset 250 10
 /* palette 16 0 400040 800000 400000 804000 404000 008000 004000 008080 004040 000080 000040 800080 */
 palette = '1, 0, 25, 000764, 50, 206bdd, 100, edffff, 150, ffaa00, 215, 310230'
 spectrum
-'save(|pnmtopng -compression 9 > spectrum.png, 'palette')'
+'save(|ifftoppm|pnmtopng -compression 9 > spectrum.png, 'palette')'
 exit

@@ -9,28 +9,31 @@ xres = 1600
 yres = 1200
 ctyp = 0
 mandel = 'fractal 0 'ctyp
-spectrum = '1, 0, 25, 000764, 50, 206bdd, 100, edffff, 150, ffaa00, 215, 310230'
 reset xres yres 10000 16
+spectrum 1 0 25 000764 50 206bdd 100 edffff 150 ffaa00 215 310230
 b = explore(x0,y0,w0,mandel)
 if b < 0 then exit
 reset 6400 4800 50000 16
+spectrum 1 0 25 000764 50 206bdd 100 edffff 150 ffaa00 215 310230
 view xc yc w
 mandel
-address system 'echo -e "Software\n\t fractal mandel\n\t xc='xc' yc='yc' w='w'" > /tmp/fractal.txt'
-'save(|pnmtopng -compression 9 -text /tmp/fractal.txt > mandel-out.png, 'spectrum')'
+address system 'echo -e "Software\n\t fractal mandel\n\t 'xc' 'yc' 'w'" > /tmp/fractal.txt'
+'save(|./bin/ifftoppm|pnmtopng -compression 9 -text /tmp/fractal.txt > mandel-out.png)'
 save
 if b = 3 then do
 xi = xc
 yi = yc
 julia = 'fractal 0 'xi' 'yi' 'ctyp
 reset xres yres 10000 16
+spectrum 1 0 25 000764 50 206bdd 100 edffff 150 ffaa00 215 310230
 b = explore(0.0,0.0,2.5,julia)
 if b < 0 then exit
 reset 6400 4800 50000 16
+spectrum 1 0 25 000764 50 206bdd 100 edffff 150 ffaa00 215 310230
 view xc yc w
 julia
 address system 'echo -e "Software\n\t fractal julia\n\t xi='xi' yi='yi'\n\t xc='xc' yc='yc' w='w'" > /tmp/fractal.txt'
-'save(|pnmtopng -compression 9 -text /tmp/fractal.txt > julia-out.png, 'spectrum')'
+'save(|./bin/ifftoppm|pnmtopng -compression 9 -text /tmp/fractal.txt > julia-out.png)'
 end
 exit
 
@@ -51,8 +54,8 @@ y0 = display.y
 b = display.button
 if b = 4 then w0 = w / 2
 if b = 5 then w0 = w * 2
-if w0 < 1e-14 then b = 2
-if w0 < 1e-13 then say 'getting close to the extreme'
+if w0 < 1e-13 then b = 2
+else if w0 < 1e-12 then say 'getting close to the extreme'
 end
 return b
 

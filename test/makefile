@@ -1,5 +1,5 @@
 #
-default: spectrum.png mandel.png julia.png
+default: mandel.png julia.png
 
 %.png: %.rexx
 	../bin/fractal $<
