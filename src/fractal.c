@@ -8,52 +8,30 @@
 #include "fractal.h"
 #include "iff.h"
 #include <X11/Xlib.h>
+#include <float.h>
+#include <math.h>
 #include <rexxsaa.h>
 #include <string.h>
 
 char hostname[] = "FRACTAL";
 
-double escape, nfac;
 unsigned int type = MANDEL, ctype = 0;
-int julia = FALSE, maxIter = 1000, nthread = 1, is = 0;
+int julia = FALSE, maxIter = 1000, nthread = 1;
 int *image;
-float *pbuf;
-struct FractalData pdata;
-pthread_t thr[MAX_THREAD];
+struct FractalData data, pdata;
 
 extern float *buf;
-extern UBYTE color[3];
-extern long open_buf();
-extern void close_buf();
+extern int setup();
+extern void teardown();
 extern struct ViewData viewData;
-extern struct FractalData data;
 extern struct ColorData colorData;
 
 extern UBYTE *get_color(float fiter, int nindex, int shift,
                         int indices[MAX_INDICES], UBYTE comps[3][MAX_INDICES]);
 extern int save_iff(char *file);
-
 extern int parse(char *input, char *args[], int narg);
-
-int open_buffer() {
-  long buflen;
-
-  buflen = open_buf();
-
-  if (buflen == 0) {
-    return (0);
-  }
-  if ((pbuf = calloc(buflen, sizeof(float))) == NULL) {
-    fprintf(stderr, "main - insufficient memory!!!\n");
-    return (0);
-  }
-  return (1);
-}
-
-void close_buffer() {
-  close_buf();
-  free(pbuf);
-}
+extern void wait();
+extern int fractal(int arb);
 
 void set_rexx_var(char *name, char *value) {
   SHVBLOCK rexxvar;
@@ -85,8 +63,6 @@ void set_rexx_double(char *name, double value) {
 }
 
 int process_event(Display *display, Window window, XImage *ximage) {
-  double dx, dy, x, y;
-
   Atom wmDeleteWindow = XInternAtom(display, "WM_DELETE_WINDOW", FALSE);
   XEvent ev;
 
@@ -99,24 +75,15 @@ int process_event(Display *display, Window window, XImage *ximage) {
               viewData.xres, viewData.yres);
     break;
   case ButtonPress:
-    if (viewData.xres > viewData.yres) {
-      dx = data.size * (double)viewData.xres / viewData.yres;
-      dy = data.size;
-    } else {
-      dx = data.size;
-      dy = data.size * (double)viewData.yres / viewData.xres;
-    }
-    x = data.xc + dx * (((double)ev.xbutton.x / viewData.xres) - 0.5);
-    y = data.yc + dy * (((double)ev.xbutton.y / viewData.yres) - 0.5);
-    set_rexx_double("DISPLAY.X", x);
-    set_rexx_double("DISPLAY.Y", y);
+    set_rexx_int("DISPLAY.X", ev.xbutton.x);
+    set_rexx_int("DISPLAY.Y", ev.xbutton.y);
     set_rexx_int("DISPLAY.BUTTON", ev.xbutton.button);
     return FALSE;
   case ClientMessage:
     // handle close window gracefully
     if (ev.xclient.data.l[0] == wmDeleteWindow) {
-      set_rexx_double("DISPLAY.X", data.xc);
-      set_rexx_double("DISPLAY.Y", data.yc);
+      set_rexx_var("DISPLAY.X", data.xc);
+      set_rexx_var("DISPLAY.Y", data.yc);
       set_rexx_int("DISPLAY.BUTTON", -1);
       XCloseDisplay(display);
       return FALSE;
@@ -177,184 +144,6 @@ void display_image() {
   free(image);
 }
 
-void wait() {
-  if (is == 0)
-    return;
-  for (int i = 0; i < is; ++i) {
-    pthread_join(thr[i], NULL);
-  }
-  is = 0;
-}
-
-double crad2(double complex z) {
-  double x, y;
-  if (ctype == 0) {
-    x = creal(z);
-    y = cimag(z);
-    return x * x + y * y;
-  }
-  switch (ctype) {
-  case REAL:
-    return creal(z * z);
-  case IMAG:
-    return cimag(z * z);
-  }
-  return creal(z);
-}
-
-float iterate(double complex z, double complex c) {
-  int iter = 0;
-  float fiter = 0.0;
-  double r = 0.0, r2;
-
-  while (((r2 = crad2(z)) <= escape) && iter < maxIter) {
-    z = z * z + c; // type == MANDEL
-    r = r2;
-    iter++;
-  }
-  if (iter < maxIter) {
-    fiter = (float)iter;
-    if (!julia && ctype == 0) {
-      fiter +=
-          (float)(1.0 - (double)(log((double)(log(r) / 2.0) / nfac) / nfac));
-    }
-    return fiter;
-  }
-  return -1.0;
-}
-
-/*
- * Get interpolated position.
- *
- * - cr Current resolution
- * - cc Current coordinate
- * - pc Prior center
- * - pw Prior distance
- */
-int interpolated_position(long cr, double cc, double pc, double pd) {
-  return (double)cr * (((cc - pc) / pd) + 0.5);
-}
-
-int sample_pbuf(int dx, int pos) {
-  if (pos < 0)
-    return FALSE;
-  if (pbuf[pos] == 0.0)
-    return FALSE;
-  if (dx == 1)
-    return (pbuf[pos] < 0.0);
-  if (dx > 0) {
-    int flag = TRUE;
-    int dy = dx * viewData.xres;
-    for (int py = 0; py <= dy; py += viewData.xres) {
-      if (!(pbuf[pos + py] < 0.0))
-        flag = FALSE;
-      for (int px = 1; px <= dx; px++) {
-        if (!(pbuf[pos + py + px] < 0.0))
-          flag = FALSE;
-        if (!(pbuf[pos + py - px] < 0.0))
-          flag = FALSE;
-        if (!(pbuf[pos - py + px] < 0.0))
-          flag = FALSE;
-        if (!(pbuf[pos - py - px] < 0.0))
-          flag = FALSE;
-      }
-    }
-    return flag;
-  }
-  return FALSE;
-}
-
-int get_pos(int x, int y, int d) {
-  if ((x < d) || (x > viewData.xres - d))
-    return -1;
-  if ((y < d) || (y > viewData.yres - d))
-    return -1;
-  return viewData.xres * y + x;
-}
-
-void generate_fractal(int x1) {
-  double dx, dy, pdx, pdy, x, y;
-  double complex z;
-  int pos, ppos, ppx, ppy, dp;
-
-  if (viewData.xres > viewData.yres) {
-    dx = data.size * (double)viewData.xres / viewData.yres;
-    dy = data.size;
-    if (pdata.size >= data.size) {
-      dp = (0.9999 + pdata.size / data.size);
-      pdx = pdata.size * (double)viewData.xres / viewData.yres;
-      pdy = pdata.size;
-    } else {
-      dp = 0;
-      pdx = dx;
-      pdy = dy;
-    }
-  } else {
-    dx = data.size;
-    dy = data.size * (double)viewData.yres / viewData.xres;
-    if (pdata.size >= data.size) {
-      dp = (0.9999 + pdata.size / data.size);
-      pdx = pdata.size;
-      pdy = pdata.size * (double)viewData.yres / viewData.xres;
-    } else {
-      dp = 0;
-      pdx = dx;
-      pdy = dy;
-    }
-  }
-
-  for (int py = 0; py < viewData.yres; py++) {
-    y = data.yc + dy * (((double)py / viewData.yres) - 0.5);
-    ppy = interpolated_position(viewData.yres, y, pdata.yc, pdy);
-    for (int px = x1; px < viewData.xres; px += nthread) {
-      x = data.xc + dx * (((double)px / viewData.xres) - 0.5);
-      ppx = interpolated_position(viewData.xres, x, pdata.xc, pdx);
-      pos = viewData.xres * py + px;
-      ppos = get_pos(ppx, ppy, 0);
-      if (sample_pbuf(dp, ppos)) {
-        buf[pos] = -1.0;
-        continue;
-      }
-      z = x + y * I;
-
-      if (julia)
-        buf[pos] = iterate(z, data.x0 + data.y0 * I);
-      else
-        buf[pos] = iterate(0.0, z);
-    }
-  }
-}
-
-void *_generate_fractal(void *arg) {
-  int *px1 = (int *)arg;
-
-  generate_fractal(*px1);
-  pthread_exit(NULL);
-}
-
-int fractal() {
-  int it, rc, xs[MAX_THREAD];
-  pthread_attr_t attr;
-
-  /* Initialize and set thread detached attribute */
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-
-  for (it = 0; it < nthread; ++it) {
-    xs[it] = it;
-    if ((rc = pthread_create(&thr[it], NULL, _generate_fractal, &xs[it]))) {
-      fprintf(stderr, "main - error: pthread_create, rc: %d\n", rc);
-      return 0;
-    }
-  }
-
-  for (it = 0; it < nthread; ++it) {
-    pthread_join(thr[it], NULL);
-  }
-  memcpy(pbuf, buf, viewData.xres * viewData.yres * sizeof(float));
-  return 1;
-}
-
 void init_color_data() {
   colorData.comps[0][0] = 0x00;
   colorData.comps[0][1] = 0xff;
@@ -374,13 +163,14 @@ void init_color_data() {
 void reset() {
   viewData.xres = 320L;
   viewData.yres = 200L;
-  data.xc = pdata.xc = -0.75;
-  data.yc = pdata.yc = 0.0;
-  data.x0 = data.y0 = 0.0;
-  data.size = 2.5;
-  pdata.size = 0.0;
-  escape = 256.0;
-  nfac = log(2.0);
+  strcpy(data.xc, "-0.75");
+  strcpy(data.yc, "0.0");
+  strcpy(data.x0, "0.0");
+  strcpy(data.y0, "0.0");
+  strcpy(data.size, "2.5");
+  strcpy(pdata.xc, "-0.75");
+  strcpy(pdata.yc, "0.0");
+  strcpy(pdata.size, "0.0");
   nthread = 1;
   type = MANDEL;
   ctype = 0;
@@ -393,11 +183,11 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
                         PRXSTRING returnstring) {
   char *args[MAXARG], *args0;
   char *icom, *ocom;
-  char commands[7][10] = {"reset", "view", "fractal", "read",
-                          "save", "display", "spectrum"};
+  char commands[7][10] = {"reset", "view", "fractal", "read", "save", "display", "spectrum"};
   char file[2048];
   int ncom = 7;
-  int i, m, n, nc, argn, scale;
+  int i, m, n, nc, argn, scale, arb = 0;
+  double size;
   unsigned int r, g, b;
 
   if (command->strptr != NULL) {
@@ -444,7 +234,7 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
      *******************************************************************************/
     case 0:
       wait();
-      close_buffer();
+      teardown();
       reset();
       if (argn > 1)
         sscanf(args[1], "%ld", &viewData.xres);
@@ -454,11 +244,10 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
         sscanf(args[3], "%d", &maxIter);
       if (argn > 4)
         sscanf(args[4], "%d", &nthread);
-      if (!open_buffer()) {
+      if (!setup()) {
         fprintf(stderr, "main - could not allocate memory for bitmap\n");
         return 0;
       }
-
       if (nthread > MAX_THREAD) {
         fprintf(stderr, "main - number of threads must be no greater than %d\n",
                 MAX_THREAD);
@@ -474,15 +263,12 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
      result:  none
      *******************************************************************************/
     case 1:
-      pdata.xc = data.xc;
-      pdata.yc = data.yc;
-      pdata.size = data.size;
-      if (argn > 1)
-        sscanf(args[1], "%lg", &data.xc);
-      if (argn > 2)
-        sscanf(args[2], "%lg", &data.yc);
-      if (argn > 3)
-        sscanf(args[3], "%lg", &data.size);
+      strcpy(pdata.xc, data.xc);
+      strcpy(pdata.yc, data.yc);
+      strcpy(pdata.size, data.size);
+      if (argn > 1) strcpy(data.xc, args[1]);
+      if (argn > 2) strcpy(data.yc, args[2]);
+      if (argn > 3) strcpy(data.size, args[3]);
       break;
 
     /*******************************************************************************
@@ -495,8 +281,8 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
       if (argn > 1)
         sscanf(args[1], "%d", &type);
       if (argn > 3) {
-        sscanf(args[2], "%lg", &data.x0);
-        sscanf(args[3], "%lg", &data.y0);
+        strcpy(data.x0, args[2]);
+        strcpy(data.y0, args[3]);
         julia = TRUE;
       } else {
         julia = FALSE;
@@ -510,11 +296,13 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
       }
       type = MANDEL;
       wait();
-      if (!fractal()) {
+      sscanf(data.size, "%lg", &size);
+      arb = size / viewData.xres < DBL_EPSILON;
+      if (!fractal(arb)) {
         return (0);
       }
-      pdata.xc = data.xc;
-      pdata.yc = data.yc;
+      strcpy(pdata.xc, data.xc);
+      strcpy(pdata.yc, data.yc);
       break;
 
     /*******************************************************************************
@@ -642,6 +430,8 @@ int main(int argc, char *argv[]) {
     RXSTRING rargv;
     if (argc > 2) {
       MAKERXSTRING(rargv, argv[2], strlen(argv[2]));
+    } else {
+      MAKERXSTRING(rargv, "", 0);
     }
     reset();
     RexxRegisterSubcomExe(hostname, (PFN)handler, NULL);

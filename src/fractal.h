@@ -6,13 +6,8 @@
  */
 
 #include <X11/Xlib.h>
-#include <complex.h>
-#include <ctype.h>
 #include <malloc.h>
-#include <math.h>
 #include <pthread.h>
-#include <stdio.h>
-#include <string.h>
 
 typedef unsigned char UBYTE;
 typedef unsigned short UWORD;
@@ -27,6 +22,11 @@ typedef char *STRPTR;
 
 #include <rexxsaa.h>
 
+#define MANDEL 0
+
+#define MAX_THREAD 64
+#define MAX_INDICES 100
+
 #ifndef FALSE
 #define FALSE 0
 #endif
@@ -34,26 +34,21 @@ typedef char *STRPTR;
 #define TRUE 1
 #endif
 
-#define MANDEL 0
 #define REAL 1
 #define IMAG 2
 
-#define MAX_THREAD 64
-#define MAX_INDICES 100
+struct ColorData {
+  int shift, nindex;
+  int indices[MAX_INDICES];
+  UBYTE comps[3][MAX_INDICES];
+};
 
 struct ViewData {
   long xres, yres;
 };
 
 struct FractalData {
-  double xc, yc, size;
-  double x0, y0;
-};
-
-struct ColorData {
-  int shift, nindex;
-  int indices[MAX_INDICES];
-  UBYTE comps[3][MAX_INDICES];
+  char x0[128], y0[128], xc[128], yc[128], size[128];
 };
 
 APIRET APIENTRY handler(PRXSTRING, PUSHORT, PRXSTRING);

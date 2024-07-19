@@ -1,12 +1,12 @@
-#include "iff.h"
 #include "fractal.h"
+#include "iff.h"
+#include <math.h>
 #include <stdio.h>
 
 float *buf;
 UBYTE color[3];
 int pipe = FALSE;
 struct ViewData viewData;
-struct FractalData data;
 struct ColorData colorData;
 
 UBYTE *get_color(float fiter, int nindex, int shift, int indices[MAX_INDICES],
@@ -129,7 +129,6 @@ int read_iff(char *file) {
     switch (header.ckID) {
     case ID_GLBL:
       SafeRead(fp, &viewData, sizeof(struct ViewData));
-      SafeRead(fp, &data, sizeof(struct FractalData));
       SafeRead(fp, &colorData, sizeof(struct ColorData));
       break;
     case ID_DATA:
@@ -153,7 +152,7 @@ int save_iff(char *file) {
 
   struct Chunk header;
   long formSize = sizeof(header) + sizeof(long) + sizeof(header) +
-                  sizeof(struct ViewData) + sizeof(struct FractalData) +
+                  sizeof(struct ViewData) + 
                   sizeof(struct ColorData) + sizeof(header) +
                   (viewData.xres * viewData.yres * sizeof(float));
 
@@ -161,18 +160,16 @@ int save_iff(char *file) {
   header.ckSize = formSize;
 
   SafeWrite(fp, &header, sizeof(header));
-
   long id = ID_FRCL;
 
   SafeWrite(fp, &id, sizeof(long));
 
   header.ckID = ID_GLBL;
-  header.ckSize = sizeof(struct ViewData) + sizeof(struct FractalData) +
+  header.ckSize = sizeof(struct ViewData) + 
                   sizeof(struct ColorData);
 
   SafeWrite(fp, &header, sizeof(header));
   SafeWrite(fp, &viewData, sizeof(struct ViewData));
-  SafeWrite(fp, &data, sizeof(struct FractalData));
   SafeWrite(fp, &colorData, sizeof(struct ColorData));
 
   header.ckID = ID_DATA;

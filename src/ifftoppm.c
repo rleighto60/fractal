@@ -1,4 +1,5 @@
 #include "fractal.h"
+#include "complexfunc.h"
 #include "iff.h"
 #include <stdio.h>
 
@@ -6,7 +7,6 @@ extern float *buf;
 extern UBYTE color[3];
 extern void close_buf();
 extern struct ViewData viewData;
-extern struct FractalData data;
 extern struct ColorData colorData;
 
 extern UBYTE *get_color(float fiter, int nindex, int shift,
