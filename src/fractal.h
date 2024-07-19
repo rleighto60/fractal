@@ -11,6 +11,7 @@
 
 typedef unsigned char UBYTE;
 typedef unsigned short UWORD;
+typedef unsigned int UINT;
 typedef unsigned long ULONG;
 typedef short WORD;
 typedef char *STRPTR;
