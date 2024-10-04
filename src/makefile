@@ -4,7 +4,7 @@ PKGCONFIG = $(shell which pkg-config)
 CFLAGS = $(shell $(PKGCONFIG) --cflags gtk4)
 LIBS = $(shell $(PKGCONFIG) --libs gtk4)
 
-all: ../bin/fractal ../bin/ifftoppm
+all: ../bin/fractal ../bin/ifftoppm ../bin/iffinfo
 
 test: ../bin/arbfunctest ../bin/arbfractaltest
 
@@ -13,6 +13,9 @@ test: ../bin/arbfunctest ../bin/arbfractaltest
 
 ../bin/ifftoppm:ifftoppm.o iff.o
 	$(CC) -o ../bin/ifftoppm ifftoppm.o iff.o -lm
+
+../bin/iffinfo:iffinfo.o iff.o
+	$(CC) -o ../bin/iffinfo iffinfo.o iff.o -lm
 
 ../bin/arbfunctest: arbfunctest.o fractalfunc.o complexfunc.o arbfunc.o iff.o
 	$(CC) -o ../bin/arbfunctest arbfunctest.o fractalfunc.o complexfunc.o arbfunc.o iff.o -lm -lflint
@@ -25,6 +28,9 @@ fractal.o:  fractal.c fractal.h iff.h
 
 ifftoppm.o:  ifftoppm.c fractal.h iff.h
 	$(CC) -c -o ifftoppm.o ifftoppm.c
+
+iffinfo.o:  iffinfo.c fractal.h iff.h
+	$(CC) -c -o iffinfo.o iffinfo.c
 
 iff.o:    iff.c
 	$(CC) -c -o iff.o iff.c

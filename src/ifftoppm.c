@@ -1,17 +1,15 @@
 #include "fractal.h"
-#include "complexfunc.h"
 #include "iff.h"
 #include <stdio.h>
 
 extern float *buf;
-extern UBYTE color[3];
 extern void close_buf();
 extern struct ViewData viewData;
 extern struct ColorData colorData;
 
 extern UBYTE *get_color(float fiter, int nindex, int shift,
                         int indices[MAX_INDICES], UBYTE comps[3][MAX_INDICES]);
-extern int read_iff(char *file);
+extern int read_iff(char *file, int icd);
 
 void save_ppm(char *file) {
   FILE *fp;
@@ -55,7 +53,7 @@ int main(int argc, char **argv) {
   else
     output = 0;
 
-  if (!read_iff(input)) {
+  if (!read_iff(input, 0)) {
     close_buf();
     fprintf(stderr, "main - error reading image!!!\n");
     return 0;

@@ -7,6 +7,7 @@
 
 #include "fractal.h"
 #include "iff.h"
+#include <X11/X.h>
 #include <X11/Xlib.h>
 #include <float.h>
 #include <math.h>
@@ -17,17 +18,22 @@ char hostname[] = "FRACTAL";
 
 unsigned int type = MANDEL, ctype = 0;
 int julia = FALSE, maxIter = 1000, nthread = 1;
-int *image;
-struct FractalData data, pdata;
+int *image = NULL;
+Display *display = NULL;
+XImage *ximage;
+Window window;
 
 extern float *buf;
-extern int setup();
-extern void teardown();
+extern int open_buf();
+extern void close_buf();
+extern void clear_buf();
+extern struct FractalData data;
 extern struct ViewData viewData;
 extern struct ColorData colorData;
 
 extern UBYTE *get_color(float fiter, int nindex, int shift,
                         int indices[MAX_INDICES], UBYTE comps[3][MAX_INDICES]);
+extern int read_iff(char *file, int icd);
 extern int save_iff(char *file);
 extern int parse(char *input, char *args[], int narg);
 extern void wait();
@@ -62,7 +68,53 @@ void set_rexx_double(char *name, double value) {
   set_rexx_var(name, strvalue);
 }
 
-int process_event(Display *display, Window window, XImage *ximage) {
+void init_display() {
+  if (display == NULL) {
+    long buflen = (long)viewData.xres * viewData.yres;
+
+    if ((image = calloc((long)buflen, sizeof(int))) == NULL) {
+      fprintf(stderr, "main - insufficient memory!!!\n");
+    }
+
+    display = XOpenDisplay(NULL);
+    Visual *visual = DefaultVisual(display, 0);
+    ximage = XCreateImage(
+        display, visual, DefaultDepth(display, DefaultScreen(display)), ZPixmap,
+        0, (char *)image, viewData.xres, viewData.yres, 32, 0);
+    window = XCreateSimpleWindow(display, RootWindow(display, 0), 0, 0,
+                                 viewData.xres, viewData.yres, 1, 0, 0);
+
+    XSelectInput(display, window, ButtonPressMask | ExposureMask);
+    XMapWindow(display, window);
+  }
+}
+
+int setup(int initDisplay) {
+  long buflen;
+
+  buflen = open_buf();
+
+  if (buflen == 0) {
+    return (0);
+  }
+  if (initDisplay) {
+    init_display();
+  }
+  return (1);
+}
+
+void teardown() {
+  close_buf();
+  if (display != NULL) {
+    XDestroyWindow(display, window);
+    display = NULL;
+  }
+  if (image != NULL) {
+    free(image);
+  }
+}
+
+int process_event() {
   Atom wmDeleteWindow = XInternAtom(display, "WM_DELETE_WINDOW", FALSE);
   XEvent ev;
 
@@ -82,10 +134,8 @@ int process_event(Display *display, Window window, XImage *ximage) {
   case ClientMessage:
     // handle close window gracefully
     if (ev.xclient.data.l[0] == wmDeleteWindow) {
-      set_rexx_var("DISPLAY.X", data.xc);
-      set_rexx_var("DISPLAY.Y", data.yc);
       set_rexx_int("DISPLAY.BUTTON", -1);
-      XCloseDisplay(display);
+      teardown();
       return FALSE;
     }
     break;
@@ -93,55 +143,63 @@ int process_event(Display *display, Window window, XImage *ximage) {
   return TRUE;
 }
 
-Display *display = NULL;
+void check_buttonpress() {
+  Atom wmDeleteWindow = XInternAtom(display, "WM_DELETE_WINDOW", FALSE);
+  XEvent ev;
 
-void init_display() {
-  if (display == NULL) {
-    display = XOpenDisplay(NULL);
+  XSetWMProtocols(display, window, &wmDeleteWindow, 1);
+
+  while (XCheckTypedEvent(display, ButtonPress, &ev)) {
+    set_rexx_int("DISPLAY.X", ev.xbutton.x);
+    set_rexx_int("DISPLAY.Y", ev.xbutton.y);
+    set_rexx_int("DISPLAY.BUTTON", ev.xbutton.button);
+  }
+  if (XCheckTypedEvent(display, ClientMessage, &ev)) {
+    // handle close window gracefully
+    if (ev.xclient.data.l[0] == wmDeleteWindow) {
+      set_rexx_int("DISPLAY.BUTTON", -1);
+      teardown();
+    }
   }
 }
 
-void display_image() {
-  int open = TRUE;
-  long i, j, pos = 0;
+void update_image() {
+  int open = TRUE, color;
+  long i, j, x, y, pos;
   float fiter;
   UBYTE *c;
 
-  long buflen = (long)viewData.xres * viewData.yres;
-
-  if ((image = calloc((long)buflen, sizeof(int))) == NULL) {
-    fprintf(stderr, "main - insufficient memory!!!\n");
-  }
-
-  pos = 0;
-
-  for (j = 0; j < viewData.yres; j++) {
-    for (i = 0; i < viewData.xres; i++) {
-      fiter = buf[pos++];
+  printf("reset %ld %ld %d\n", viewData.xres, viewData.yres, viewData.scale);
+  printf("view %s %s %s\n", data.xc, data.yc, data.size);
+  for (y = 0; y < viewData.yres; y += viewData.scale) {
+    for (x = 0; x < viewData.xres; x += viewData.scale) {
+      pos = viewData.xres * y + x;
+      fiter = buf[pos];
       c = get_color(fiter, colorData.nindex, colorData.shift, colorData.indices,
                     colorData.comps);
-      image[pos] = c[0] << 16 | c[1] << 8 | c[2];
+      color = c[0] << 16 | c[1] << 8 | c[2];
+      if (viewData.scale == 1)
+        image[pos] = color;
+      else {
+        for (i = 0; i < viewData.scale; i++) {
+          for (j = 0; j < viewData.scale; j++) {
+            image[pos + (viewData.xres * i) + j] = color;
+          }
+        }
+      }
     }
   }
 
-  init_display();
+  XPutImage(display, window, DefaultGC(display, 0), ximage, 0, 0, 0, 0,
+            viewData.xres, viewData.yres);
 
-  Visual *visual = DefaultVisual(display, 0);
-  XImage *ximage = XCreateImage(
-      display, visual, DefaultDepth(display, DefaultScreen(display)), ZPixmap,
-      0, (char *)image, viewData.xres, viewData.yres, 32, 0);
-  Window window = XCreateSimpleWindow(display, RootWindow(display, 0), 0, 0,
-                                      viewData.xres, viewData.yres, 1, 0, 0);
-
-  XSelectInput(display, window, ButtonPressMask | ExposureMask);
-  XMapWindow(display, window);
-
-  while (open) {
-    open = process_event(display, window, ximage);
+  if (viewData.scale == 1) {
+    while (open) {
+      open = process_event();
+    }
+  } else {
+    check_buttonpress();
   }
-
-  XDestroyWindow(display, window);
-  free(image);
 }
 
 void init_color_data() {
@@ -163,14 +221,12 @@ void init_color_data() {
 void reset() {
   viewData.xres = 320L;
   viewData.yres = 200L;
+  viewData.scale = 1;
   strcpy(data.xc, "-0.75");
   strcpy(data.yc, "0.0");
   strcpy(data.x0, "0.0");
   strcpy(data.y0, "0.0");
   strcpy(data.size, "2.5");
-  strcpy(pdata.xc, "-0.75");
-  strcpy(pdata.yc, "0.0");
-  strcpy(pdata.size, "0.0");
   nthread = 1;
   type = MANDEL;
   ctype = 0;
@@ -183,7 +239,8 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
                         PRXSTRING returnstring) {
   char *args[MAXARG], *args0;
   char *icom, *ocom;
-  char commands[7][10] = {"reset", "view", "fractal", "read", "save", "display", "spectrum"};
+  char commands[7][10] = {"reset", "view",    "fractal", "read",
+                          "save",  "display", "spectrum"};
   char file[2048];
   int ncom = 7;
   int i, m, n, nc, argn, scale, arb = 0;
@@ -225,14 +282,16 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
     switch (nc) {
 
     /*******************************************************************************
-     reset(xres,yres,maxIter,nthread) - reset
+     reset(xres,yres,maxIter,nthread,display) - reset
      where:   xres    = x resolution of view
               yres    = y resolution of view
               maxIter = maximum number of iterations
               nthread = number of threads
+              display = open display if true
      result:  none
      *******************************************************************************/
     case 0:
+      n = 0;
       wait();
       teardown();
       reset();
@@ -244,7 +303,9 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
         sscanf(args[3], "%d", &maxIter);
       if (argn > 4)
         sscanf(args[4], "%d", &nthread);
-      if (!setup()) {
+      if (argn > 5)
+        sscanf(args[5], "%d", &n);
+      if (!setup(n)) {
         fprintf(stderr, "main - could not allocate memory for bitmap\n");
         return 0;
       }
@@ -260,15 +321,25 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
      where:   xc    = center x coordinate
               yc    = center y coordinate
               size  = size
-     result:  none
+              scale = scale (scaling view by dividing resolution by 2 ^ scale)
+     default 0) result:  none
      *******************************************************************************/
     case 1:
-      strcpy(pdata.xc, data.xc);
-      strcpy(pdata.yc, data.yc);
-      strcpy(pdata.size, data.size);
-      if (argn > 1) strcpy(data.xc, args[1]);
-      if (argn > 2) strcpy(data.yc, args[2]);
-      if (argn > 3) strcpy(data.size, args[3]);
+      scale = 1;
+      if (argn > 1)
+        strcpy(data.xc, args[1]);
+      if (argn > 2)
+        strcpy(data.yc, args[2]);
+      if (argn > 3)
+        strcpy(data.size, args[3]);
+      if (argn > 4) {
+        sscanf(args[4], "%d", &n);
+        scale = 1 << n;
+      }
+      if (viewData.scale <= scale) {
+        clear_buf();
+      }
+      viewData.scale = scale;
       break;
 
     /*******************************************************************************
@@ -301,16 +372,36 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
       if (!fractal(arb)) {
         return (0);
       }
-      strcpy(pdata.xc, data.xc);
-      strcpy(pdata.yc, data.yc);
+      if (display != NULL) {
+        update_image();
+      }
       break;
 
     /*******************************************************************************
-     read(filename) - read image
+     read(filename,display) - read image
      where:   filename = the name of the file to store image
+              display = open display if true
      result:  none
      *******************************************************************************/
     case 3:
+      if (argn > 1) {
+        strcpy(file, args[1]);
+        if (!read_iff(file, 1)) {
+          fprintf(stderr, "main - could not read file: %s\n", file);
+          return 0;
+        }
+      }
+      if (argn > 2)
+        sscanf(args[2], "%d", &n);
+      if (n) {
+        init_display();
+      }
+      if (display != NULL) {
+        update_image();
+      }
+      set_rexx_var("FRACTAL.XC", data.xc);
+      set_rexx_var("FRACTAL.YC", data.yc);
+      set_rexx_var("FRACTAL.SIZE", data.size);
       break;
 
     /*******************************************************************************
@@ -330,7 +421,7 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
      result:  none
      *******************************************************************************/
     case 5:
-      display_image();
+      // display_image();
       break;
 
     /*******************************************************************************

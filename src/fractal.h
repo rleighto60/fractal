@@ -46,10 +46,11 @@ struct ColorData {
 
 struct ViewData {
   long xres, yres;
+  int scale; // 1 - no scale, > 1 (2**<input scale>) - res / scale
 };
 
 struct FractalData {
-  char x0[128], y0[128], xc[128], yc[128], size[128];
+  char x0[512], y0[512], xc[512], yc[512], size[512];
 };
 
 APIRET APIENTRY handler(PRXSTRING, PUSHORT, PRXSTRING);

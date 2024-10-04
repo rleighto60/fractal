@@ -1,13 +1,37 @@
-#include "fractal.h"
 #include "iff.h"
+#include "fractal.h"
 #include <math.h>
 #include <stdio.h>
 
 float *buf;
 UBYTE color[3];
 int pipe = FALSE;
+struct FractalData data;
 struct ViewData viewData;
-struct ColorData colorData;
+struct ColorData colorData, ignoreColorData;
+
+long open_buf() {
+  long buflen;
+
+  buflen = viewData.xres * viewData.yres;
+
+  if ((buf = calloc((long)buflen, sizeof(float))) == NULL) {
+    fprintf(stderr, "main - insufficient memory!!!\n");
+    return (0);
+  }
+  return buflen;
+}
+
+void clear_buf() {
+  long buflen;
+
+  buflen = viewData.xres * viewData.yres;
+
+  for (int pos = 0; pos < buflen; pos++)
+    buf[pos] = 0.0;
+}
+
+void close_buf() { free(buf); }
 
 UBYTE *get_color(float fiter, int nindex, int shift, int indices[MAX_INDICES],
                  UBYTE comps[3][MAX_INDICES]) {
@@ -83,23 +107,7 @@ int close_file(FILE *stream) {
   return rc;
 }
 
-long open_buf() {
-  long buflen;
-
-  buflen = viewData.xres * viewData.yres;
-
-  if ((buf = calloc((long)buflen, sizeof(float))) == NULL) {
-    fprintf(stderr, "main - insufficient memory!!!\n");
-    return (0);
-  }
-  return buflen;
-}
-
-void close_buf() {
-  free(buf);
-}
-
-int read_iff(char *file) {
+int read_iff(char *file, int icd) {
   FILE *fp;
   struct Chunk header;
   long id, buflen;
@@ -128,12 +136,19 @@ int read_iff(char *file) {
 
     switch (header.ckID) {
     case ID_GLBL:
+      SafeRead(fp, &data, sizeof(struct FractalData));
       SafeRead(fp, &viewData, sizeof(struct ViewData));
-      SafeRead(fp, &colorData, sizeof(struct ColorData));
+      if (icd) {
+        SafeRead(fp, &ignoreColorData, sizeof(struct ColorData));
+      } else {
+        SafeRead(fp, &colorData, sizeof(struct ColorData));
+      }
       break;
     case ID_DATA:
       if ((buflen = open_buf())) {
         SafeRead(fp, buf, buflen * sizeof(float));
+      } else {
+        return (0);
       }
       break;
     }
@@ -152,7 +167,7 @@ int save_iff(char *file) {
 
   struct Chunk header;
   long formSize = sizeof(header) + sizeof(long) + sizeof(header) +
-                  sizeof(struct ViewData) + 
+                  sizeof(struct FractalData) + sizeof(struct ViewData) +
                   sizeof(struct ColorData) + sizeof(header) +
                   (viewData.xres * viewData.yres * sizeof(float));
 
@@ -165,10 +180,11 @@ int save_iff(char *file) {
   SafeWrite(fp, &id, sizeof(long));
 
   header.ckID = ID_GLBL;
-  header.ckSize = sizeof(struct ViewData) + 
+  header.ckSize = sizeof(struct FractalData) + sizeof(struct ViewData) +
                   sizeof(struct ColorData);
 
   SafeWrite(fp, &header, sizeof(header));
+  SafeWrite(fp, &data, sizeof(struct FractalData));
   SafeWrite(fp, &viewData, sizeof(struct ViewData));
   SafeWrite(fp, &colorData, sizeof(struct ColorData));
 

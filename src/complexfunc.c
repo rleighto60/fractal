@@ -6,14 +6,19 @@ double escape, logtwo;
 
 extern unsigned int ctype;
 extern int julia, maxIter, nthread;
-extern float *buf, *pbuf;
-extern int sample_pbuf(long dx, long pos);
+extern float *buf;
 extern struct ViewData viewData;
-extern struct FractalData data, pdata;
+extern struct FractalData data;
+
+void complex_setup() {
+  escape = 256.0;
+  logtwo = log(2.0);
+}
 
 /**
- * @brief Get the world ordinate value - translate screen ordinate value to world ordinate value - ord = c + d * ((scr / wd) - 0.5);
- * 
+ * @brief Get the world ordinate value - translate screen ordinate value to
+ * world ordinate value - ord = c + d * ((scr / wd) - 0.5);
+ *
  * @param ord World ordinate value to set translated value to
  * @param d World distance
  * @param c World center
@@ -22,12 +27,13 @@ extern struct FractalData data, pdata;
  * @return double World ordinate value
  */
 double get_world_ord(double d, double c, long scr, long wd) {
-  return c + d * (((double)scr /wd) - 0.5);
+  return c + d * (((double)scr / wd) - 0.5);
 }
 
 /**
- * @brief Get the screen ordinate value - translate world ordinate value to screen ordinate value - ord = wd * (((wld - c) / d) + 0.5);
- * 
+ * @brief Get the screen ordinate value - translate world ordinate value to
+ * screen ordinate value - ord = wd * (((wld - c) / d) + 0.5);
+ *
  * @param d World distance
  * @param c World center
  * @param wld World ordinate value
@@ -35,7 +41,7 @@ double get_world_ord(double d, double c, long scr, long wd) {
  * @return long Screen ordinate value
  */
 long get_screen_ord(double d, double c, double wld, long wd) {
-  return (double)wd * (((wld - c) / d) + 0.5); 
+  return (double)wd * (((wld - c) / d) + 0.5);
 }
 
 struct Coord get_delta(struct ViewData viewData, double size) {
@@ -55,7 +61,8 @@ struct Coord get_delta(struct ViewData viewData, double size) {
   return delta;
 }
 
-struct Coord get_coord(struct ViewData viewData, double xc, double yc, double size, long ix, long iy) {
+struct Coord get_coord(struct ViewData viewData, double xc, double yc,
+                       double size, long ix, long iy) {
   struct Coord delta, coord;
 
   delta = get_delta(viewData, size);
@@ -98,73 +105,46 @@ float iterate(double complex z, double complex c) {
   if (iter < maxIter) {
     fiter = (float)iter;
     if (!julia && ctype == 0) {
-      fiter +=
-          (float)(1.0 - (double)(log((double)(log(r) / 2.0) / logtwo) / logtwo));
+      fiter += (float)(1.0 -
+                       (double)(log((double)(log(r) / 2.0) / logtwo) / logtwo));
     }
     return fiter;
   }
   return -1.0;
 }
 
-void complex_setup() {
-  escape = 256.0;
-  logtwo = log(2.0);
-}
-
-int get_pos(int x, int y, int d) {
-  if ((x < d) || (x > viewData.xres - d))
-    return -1;
-  if ((y < d) || (y > viewData.yres - d))
-    return -1;
-  return viewData.xres * y + x;
-}
-
 void generate_fractal(int x1) {
   double x, y;
-  double x0, y0, xc, yc, size;
-  double pxc, pyc, psize;
+  double xi, x0, y0, xc, yc, size;
   double complex z;
-  int pos, ppos, ppx, ppy, dp;
-  struct Coord delta, pdelta;
+  long pos;
+  int dx, dy;
+  struct Coord delta;
 
-  complex_setup();
   sscanf(data.size, "%lg", &size);
-  sscanf(pdata.size, "%lg", &psize);
   sscanf(data.xc, "%lg", &xc);
-  sscanf(pdata.xc, "%lg", &pxc);
   sscanf(data.yc, "%lg", &yc);
-  sscanf(pdata.yc, "%lg", &pyc);
   delta = get_delta(viewData, size);
 
-  if (psize >= size) {
-    dp = (0.9999 + psize / size);
-    pdelta = get_delta(viewData, psize);
-  } else {
-    dp = 0;
-    pdelta.x = delta.x;
-    pdelta.y = delta.y;
-  }
+  dx = nthread * viewData.scale;
+  dy = viewData.scale;
+  xi = x1 * viewData.scale;
 
-  for (int py = 0; py < viewData.yres; py++) {
+  for (int py = 0; py < viewData.yres; py += dy) {
     y = get_world_ord(delta.y, yc, py, viewData.yres);
-    ppy = get_screen_ord(pdelta.y, pyc, y, viewData.yres);
-    for (int px = x1; px < viewData.xres; px += nthread) {
-      x = get_world_ord(delta.x, xc, px, viewData.xres);
-      ppx = get_screen_ord(pdelta.x, pxc, x, viewData.xres);
+    for (int px = xi; px < viewData.xres; px += dx) {
       pos = viewData.xres * py + px;
-      ppos = get_pos(ppx, ppy, 0);
-      if (sample_pbuf(dp, ppos)) {
-        buf[pos] = -1.0;
-        continue;
-      }
-      z = x + y * I;
+      if (buf[pos] == 0.0) {
+        x = get_world_ord(delta.x, xc, px, viewData.xres);
+        z = x + y * I;
 
-      if (julia) {
-        sscanf(data.x0, "%lg", &x0);
-        sscanf(data.y0, "%lg", &y0);
-        buf[pos] = iterate(z, x0 + y0 * I);
-      } else {
-        buf[pos] = iterate(0.0, z);
+        if (julia) {
+          sscanf(data.x0, "%lg", &x0);
+          sscanf(data.y0, "%lg", &y0);
+          buf[pos] = iterate(z, x0 + y0 * I);
+        } else {
+          buf[pos] = iterate(0.0, z);
+        }
       }
     }
   }

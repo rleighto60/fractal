@@ -2,66 +2,14 @@
 #include <string.h>
 
 int is = 0;
-float *pbuf;
 pthread_t thr[MAX_THREAD];
 
 extern int nthread;
-extern float *buf;
-extern struct ViewData viewData;
-extern long open_buf();
-extern void close_buf();
 extern void generate_fractal(int x1);
 extern void arb_generate_fractal(int x1);
+extern void complex_setup();
 extern void arb_setup();
-
-int setup() {
-  long buflen;
-
-  buflen = open_buf();
-
-  if (buflen == 0) {
-    return (0);
-  }
-  if ((pbuf = calloc(buflen, sizeof(float))) == NULL) {
-    fprintf(stderr, "main - insufficient memory!!!\n");
-    return (0);
-  }
-  return (1);
-}
-
-void teardown() {
-  close_buf();
-  free(pbuf);
-}
-
-int sample_pbuf(long dx, long pos) {
-  if (pos < 0)
-    return FALSE;
-  if (pbuf[pos] == 0.0)
-    return FALSE;
-  if (dx == 1)
-    return (pbuf[pos] < 0.0);
-  if (dx > 0) {
-    int flag = TRUE;
-    long dy = dx * viewData.xres;
-    for (long py = 0; py <= dy; py += viewData.xres) {
-      if (!(pbuf[pos + py] < 0.0))
-        flag = FALSE;
-      for (long px = 1; px <= dx; px++) {
-        if (!(pbuf[pos + py + px] < 0.0))
-          flag = FALSE;
-        if (!(pbuf[pos + py - px] < 0.0))
-          flag = FALSE;
-        if (!(pbuf[pos - py + px] < 0.0))
-          flag = FALSE;
-        if (!(pbuf[pos - py - px] < 0.0))
-          flag = FALSE;
-      }
-    }
-    return flag;
-  }
-  return FALSE;
-}
+extern void arb_teardown();
 
 void wait() {
   if (is == 0)
@@ -95,6 +43,7 @@ int fractal(int arb) {
     arb_setup();
     func = _arb_generate_fractal;
   } else {
+    complex_setup();
     func = _generate_fractal;
   }
 
@@ -113,6 +62,6 @@ int fractal(int arb) {
   for (it = 0; it < nthread; ++it) {
     pthread_join(thr[it], NULL);
   }
-  memcpy(pbuf, buf, viewData.xres * viewData.yres * sizeof(float));
+  if (arb) arb_teardown();
   return 1;
 }

@@ -59,6 +59,7 @@ void test_fractal() {
   // strcpy(data.size, "2E-12");
   viewData.xres = 800L;
   viewData.yres = 600L;
+  viewData.scale = 1;
 
   setup();
   fractal(1);

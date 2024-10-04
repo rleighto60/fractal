@@ -8,5 +8,5 @@ reset xres yres 4000 16
 view xc yc size
 fractal
 'save(mandel.iff)'
-'save(|../bin/ifftoppm|pnmtopng -compression 9 > mandel.png)'
+address system '../bin/ifftoppm mandel.iff|pnmtopng -compression 9 > mandel.png'
 exit

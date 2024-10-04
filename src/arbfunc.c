@@ -8,19 +8,34 @@
 #include <flint/arf_types.h>
 #include <flint/flint.h>
 
-slong prec = 1024;
+slong prec = 4096;
 arb_t arb_escape, arb_logtwo;
 
 extern int maxIter, nthread;
 extern float *buf;
-extern int sample_pbuf(long dx, long pos);
 extern struct ViewData viewData;
-extern struct FractalData data, pdata;
+extern struct FractalData data;
+
+slong calc_prec() {
+  arb_t size, p;
+  slong pvalue;
+
+  arb_init(size);
+  arb_init(p);
+  arb_set_str(size, data.size, prec);
+  arb_div_ui(p, size, viewData.xres, prec);
+  pvalue = arb_bits(p);
+  arb_clear(size);
+  arb_clear(p);
+  return pvalue;
+}
 
 void arb_setup() {
   arb_init(arb_escape);
   arb_init(arb_logtwo);
 
+  //prec = calc_prec();
+  //printf("prec = %ld\n", prec);
   arb_set_str(arb_escape, "2.0", prec);
   arb_const_log2(arb_logtwo, prec);
 }
@@ -45,8 +60,9 @@ long arb_get_long_div(arb_t x, arb_t y) {
 }
 
 /**
- * @brief Get the world ordinate value - translate screen ordinate value to world ordinate value - ord = c + d * ((scr / wd) - 0.5);
- * 
+ * @brief Get the world ordinate value - translate screen ordinate value to
+ * world ordinate value - ord = c + d * ((scr / wd) - 0.5);
+ *
  * @param ord World ordinate value to set translated value to
  * @param d World distance
  * @param c World center
@@ -71,8 +87,9 @@ void arb_get_world_ord(arb_t ord, arb_t d, arb_t c, long scr, long wd) {
 }
 
 /**
- * @brief Get the screen ordinate value - translate world ordinate value to screen ordinate value - ord = wd * (((wld - c) / d) + 0.5);
- * 
+ * @brief Get the screen ordinate value - translate world ordinate value to
+ * screen ordinate value - ord = wd * (((wld - c) / d) + 0.5);
+ *
  * @param d World distance
  * @param c World center
  * @param wld World ordinate value
@@ -125,7 +142,8 @@ void arb_get_delta(struct Coord *delta, struct ViewData viewData, arb_t size) {
   arb_clear(aspect);
 }
 
-void arb_get_coord(struct Coord *coord, struct ViewData viewData, arb_t xc, arb_t yc, arb_t size, long ix, long iy) {
+void arb_get_coord(struct Coord *coord, struct ViewData viewData, arb_t xc,
+                   arb_t yc, arb_t size, long ix, long iy) {
   struct Coord delta;
 
   arb_init(delta.x);
@@ -144,13 +162,13 @@ void arb_get_coord(struct Coord *coord, struct ViewData viewData, arb_t xc, arb_
 }
 
 int arb_bailout(arb_t r, acb_t z) {
-    acb_abs(r, z, prec);
+  acb_abs(r, z, prec);
 
-    if (arb_gt(r, arb_escape)) {
-        return 1;
-    }
+  if (arb_gt(r, arb_escape)) {
+    return 1;
+  }
 
-    return 0;
+  return 0;
 }
 
 float arb_iterate(acb_t z, acb_t c) {
@@ -188,70 +206,44 @@ float arb_iterate(acb_t z, acb_t c) {
   return fiter;
 }
 
-long arb_get_pos(long x, long y, long d) {
-  if ((x < d) || (x > viewData.xres - d))
-    return -1;
-  if ((y < d) || (y > viewData.yres - d))
-    return -1;
-  return viewData.xres * y + x;
-}
-
 void arb_generate_fractal(int x1) {
   arb_t x, y;
   acb_t z, c;
-  arb_t xc, yc, pxc, pyc, size, psize;
-  long pos, ppos, ppx, ppy, dp;
-  struct Coord delta, pdelta;
+  arb_t xc, yc, size;
+  long pos;
+  int xi, dx, dy;
+  struct Coord delta;
 
   arb_init(x);
   arb_init(y);
   arb_init(delta.x);
   arb_init(delta.y);
-  arb_init(pdelta.x);
-  arb_init(pdelta.y);
   arb_init(xc);
   arb_init(yc);
   arb_init(size);
-  arb_init(pxc);
-  arb_init(pyc);
-  arb_init(psize);
   acb_init(z);
   acb_init(c);
 
   arb_set_str(xc, data.xc, prec);
   arb_set_str(yc, data.yc, prec);
   arb_set_str(size, data.size, prec);
-  arb_set_str(pxc, pdata.xc, prec);
-  arb_set_str(pyc, pdata.yc, prec);
-  arb_set_str(psize, pdata.size, prec);
 
   arb_get_delta(&delta, viewData, size);
 
-  if (arb_ge(psize, size)) {
-    dp = arb_get_long_div(psize, size);
-    arb_get_delta(&pdelta, viewData, psize);
-  } else {
-    dp = 0;
-    arb_set(pdelta.x, delta.x);
-    arb_set(pdelta.y, delta.y);
-  }
+  dx = nthread * viewData.scale;
+  dy = viewData.scale;
+  xi = x1 * viewData.scale;
 
-  for (long py = 0; py < viewData.yres; py++) {
+  for (long py = 0; py < viewData.yres; py += dy) {
     arb_get_world_ord(y, delta.y, yc, py, viewData.yres);
-    ppy = arb_get_screen_ord(pdelta.y, pyc, y, viewData.yres);
-    for (long px = x1; px < viewData.xres; px += nthread) {
+    for (long px = xi; px < viewData.xres; px += dx) {
       pos = viewData.xres * py + px;
-      arb_get_world_ord(x, delta.x, xc, px, viewData.xres);
-      ppx = arb_get_screen_ord(pdelta.x, pxc, x, viewData.xres);
-      ppos = arb_get_pos(ppx, ppy, 0);
-      if (sample_pbuf(dp, ppos)) {
-        buf[pos] = -1.0;
-        continue;
+      if (buf[pos] == 0.0) {
+        arb_get_world_ord(x, delta.x, xc, px, viewData.xres);
+        acb_zero(z);
+        acb_set_arb_arb(c, x, y);
+        buf[pos] = arb_iterate(z, c);
       }
-      acb_zero(z);
-      acb_set_arb_arb(c, x, y);
-      buf[pos] = arb_iterate(z, c);
-      // printf("%f\n", buf[pos]);
     }
     printf("%ld %%\r", 100 * py / viewData.yres);
     fflush(stdout);
@@ -261,14 +253,9 @@ void arb_generate_fractal(int x1) {
   arb_clear(y);
   arb_clear(delta.x);
   arb_clear(delta.y);
-  arb_clear(pdelta.x);
-  arb_clear(pdelta.y);
   arb_clear(xc);
   arb_clear(yc);
   arb_clear(size);
-  arb_clear(pxc);
-  arb_clear(pyc);
-  arb_clear(psize);
   acb_clear(z);
   acb_clear(c);
 }
