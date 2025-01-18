@@ -6,7 +6,7 @@
  */
 
 #include "fractal.h"
-#include "iff.h"
+#include "fff.h"
 #include <X11/X.h>
 #include <X11/Xlib.h>
 #include <float.h>
@@ -32,8 +32,8 @@ extern struct ViewData viewData;
 extern struct ColorData colorData;
 
 extern UBYTE *get_color(float fiter);
-extern int read_iff(char *file);
-extern int save_iff(char *file);
+extern int read_fff(char *file);
+extern int save_fff(char *file);
 extern int parse(char *input, char *args[], int narg);
 extern void wait();
 extern int fractal(int arb);
@@ -361,7 +361,7 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
     case 3:
       if (argn > 1) {
         strcpy(file, args[1]);
-        if (!read_iff(file)) {
+        if (!read_fff(file)) {
           fprintf(stderr, "main - could not read file: %s\n", file);
           return 0;
         }
@@ -381,7 +381,7 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
     case 4:
       if (argn > 1) {
         strcpy(file, args[1]);
-        save_iff(file);
+        save_fff(file);
       }
       break;
 

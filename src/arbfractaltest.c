@@ -10,7 +10,7 @@ unsigned int ctype = 0;
 int julia, maxIter = 10000, nthread = 16;
 struct FractalData data, pdata;
 
-extern int save_iff(char *file);
+extern int save_fff(char *file);
 extern struct ViewData viewData;
 extern struct ColorData colorData;
 
@@ -64,7 +64,7 @@ void test_fractal() {
   setup();
   fractal(1);
   init_color_data();
-  save_iff("test.iff");
+  save_fff("test.fff");
   teardown();
 }
 

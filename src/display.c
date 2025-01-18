@@ -1,11 +1,10 @@
 #include "fractal.h"
-#include "iff.h"
 #include <X11/X.h>
 #include <X11/Xlib.h>
 
 extern float *buf;
-extern int read_iff(char *file);
-extern int save_iff(char *file);
+extern int read_fff(char *file);
+extern int save_fff(char *file);
 extern void close_buf();
 extern void palette(void (*update_image)());
 extern struct ViewData viewData;
@@ -129,7 +128,7 @@ int process_event() {
     case 27: // r - reset
       break;
     case 39: // s - save
-      save_iff(file);
+      save_fff(file);
       break;
     }
     printf("key code %d\n", ev.xkey.keycode);
@@ -154,7 +153,7 @@ int main(int argc, char **argv) {
   else
     file = 0;
 
-  if (!read_iff(file)) {
+  if (!read_fff(file)) {
     free(buf);
     fprintf(stderr, "main - error reading image!!!\n");
     return 0;

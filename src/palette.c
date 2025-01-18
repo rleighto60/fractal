@@ -1,5 +1,4 @@
 #include "fractal.h"
-#include "iff.h"
 #include <X11/X.h>
 #include <X11/Xlib.h>
 #include <math.h>

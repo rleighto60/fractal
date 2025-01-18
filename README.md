@@ -1,8 +1,8 @@
 # Fractal
 
-![intro](julia.jpg)
+![intro](doc/fractal.png)
 
-![julia.rexx](julia.rexx)
+![fractal.rexx](doc/fractal.rexx)
 
 ## Introduction
 
@@ -12,6 +12,7 @@ Simple fractal generator.
 
 * [The Regina REXX interpreter - regina-rexx version 3.9.3](https://sourceforge.net/projects/regina-rexx/files/regina-rexx/3.9.3/)
   * [development files - libregina3-dev](https://sourceforge.net/projects/regina-rexx/files/regina-rexx/3.9.3/)
+* [Fast Library for Number Theory - FLINT version 3.1.2](https://flintlib.org)
 * Optional - [Netpbm](http://netpbm.sourceforge.net/)
 
 ## Documentation

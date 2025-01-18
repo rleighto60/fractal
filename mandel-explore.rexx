@@ -1,11 +1,11 @@
 /* macro for Fractal */
 numeric digits 320
-parse arg iff
+parse arg fff
 xr = 800
 yr = 600
 sc = 0
 reset xr yr 20000 17
-if iff = '' then do
+if fff = '' then do
     x0 = -0.5
     y0 = 0.0
     w0 = 2.5
@@ -14,7 +14,7 @@ if iff = '' then do
     fractal
     end
 else do
-    read iff
+    read fff
     xr = display.xres
     yr = display.yres
     sc = display.scale
@@ -27,7 +27,7 @@ b = explore(display.button)
 if b < 0 then exit
 address system 'echo -e "Software\n\t fractal mandel\n\t 'xc' 'yc' 'w'" > /tmp/fractal.txt'
 'save(mandel-out.fff)'
-address system './bin/ifftoppm mandel-out.fff|pnmtopng -compression 9 -text /tmp/fractal.txt > mandel-out.png'
+address system './bin/ffftoppm mandel-out.fff|pnmtopng -compression 9 -text /tmp/fractal.txt > mandel-out.png'
 exit
 
 explore:

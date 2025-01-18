@@ -1,16 +1,21 @@
-#LyX 2.3 created this file. For more info see http://www.lyx.org/
-\lyxformat 544
+#LyX 2.4 created this file. For more info see https://www.lyx.org/
+\lyxformat 620
 \begin_document
 \begin_header
 \save_transient_properties true
 \origin unavailable
 \textclass article
+\begin_preamble
+% Added by lyx2lyx
+\setlength{\parskip}{\medskipamount}
+\setlength{\parindent}{0pt}
+\end_preamble
 \use_default_options true
-\maintain_unincluded_children false
+\maintain_unincluded_children no
 \language english
 \language_package default
-\inputencoding auto
-\fontencoding global
+\inputencoding auto-legacy
+\fontencoding auto
 \font_roman "times" "default"
 \font_sans "default" "default"
 \font_typewriter "default" "default"
@@ -18,7 +23,9 @@
 \font_default_family rmdefault
 \use_non_tex_fonts false
 \font_sc false
-\font_osf false
+\font_roman_osf false
+\font_sans_osf false
+\font_typewriter_osf false
 \font_sf_scale 100 100
 \font_tt_scale 100 100
 \use_microtype false
@@ -61,7 +68,9 @@
 \suppress_date false
 \justification true
 \use_refstyle 1
+\use_formatted_ref 0
 \use_minted 0
+\use_lineno 0
 \index Index
 \shortcut idx
 \color #008000
@@ -72,8 +81,8 @@
 \bottommargin 1in
 \secnumdepth 3
 \tocdepth 3
-\paragraph_separation skip
-\defskip medskip
+\paragraph_separation indent
+\paragraph_indentation default
 \is_math_indent 0
 \math_numbering_side default
 \quotes_style english
@@ -81,11 +90,16 @@
 \papercolumns 1
 \papersides 1
 \paperpagestyle default
+\tablestyle default
 \tracking_changes false
 \output_changes false
+\change_bars false
+\postpone_fragile_content false
 \html_math_output 0
 \html_css_as_file 0
 \html_be_strict false
+\docbook_table_output 0
+\docbook_mathml_prefix 1
 \end_header
 
 \begin_body
@@ -96,12 +110,15 @@ FRACTAL GENERATOR
 
 \begin_layout Standard
 This program is not public domain.
- It may not be distributed, sold or used in any commercial software without
- prior consent.
+ It may not be distributed,
+ sold or used in any commercial software without prior consent.
 \end_layout
 
 \begin_layout Standard
-Copyright 2022 by Russell Leighton
+Copyright 2022,
+ 2023,
+ 2024,
+ 2025 by Russell Leighton
 \end_layout
 
 \begin_layout Standard
@@ -118,20 +135,19 @@ Introduction:
 \end_layout
 
 \begin_layout Standard
-This implementation of a fractal generation algorithm, while not unique,
+This implementation of a fractal generation algorithm,
+ while not unique,
  does represent an attempt to keep it simple and efficient.
  The focus is on computation using complex data types and parallelization,
- along with an embedded macro language, to provide a simple but flexible
- capability to produce fractal images.
- Output is provided in a simple, standard portable bitmap format that can
- be piped to appropriate translation utilities to produce images files,
+ along with an embedded macro language,
+ to provide a simple but flexible capability to produce fractal images.
+ Output is provided in a simple,
+ standard portable bitmap format that can be piped to appropriate translation utilities to produce images files,
  avoiding the need to implement support for any specific output format.
 \end_layout
 
 \begin_layout Standard
-The algorithm used in this implementation is focused on the Mandelbrot set
- and related Julia sets arising from the iterative solution of the simple
- equation 
+The algorithm used in this implementation is focused on the Mandelbrot set and related Julia sets arising from the iterative solution of the simple equation 
 \begin_inset Formula $z=z^{2}+c$
 \end_inset
 
@@ -169,8 +185,8 @@ The algorithm used in this implementation is focused on the Mandelbrot set
 \begin_inset Formula $z$
 \end_inset
 
- diverge can be visualized by assigning a color, based on the iteration
- count 
+ diverge can be visualized by assigning a color,
+ based on the iteration count 
 \begin_inset Formula $n$
 \end_inset
 
@@ -182,21 +198,24 @@ The algorithm used in this implementation is focused on the Mandelbrot set
 \begin_inset Formula $2$
 \end_inset
 
- (i.e., 
+ (i.e.,
+ 
 \begin_inset Formula $|z_{n}|>2$
 \end_inset
 
-), to an image pixel placed at a coordinate derived from the real and imaginary
- parts of 
+),
+ to an image pixel placed at a coordinate derived from the real and imaginary parts of 
 \begin_inset Formula $c$
 \end_inset
 
 .
- An iteration count that exceeds a threshold, without 
+ An iteration count that exceeds a threshold,
+ without 
 \begin_inset Formula $|z|$
 \end_inset
 
- exceeding the escape value, implies that the assigned value of 
+ exceeding the escape value,
+ implies that the assigned value of 
 \begin_inset Formula $c$
 \end_inset
 
@@ -217,8 +236,7 @@ fractal
 \begin_inset Quotes erd
 \end_inset
 
- visualization is in fact a graphical depiction of the rate of divergence
- of 
+ visualization is in fact a graphical depiction of the rate of divergence of 
 \begin_inset Formula $z$
 \end_inset
 
@@ -226,12 +244,14 @@ fractal
 \begin_inset Formula $c$
 \end_inset
 
- in the defined view, that are by definition, not part of the Mandelbrot
- set.
+ in the defined view,
+ that are by definition,
+ not part of the Mandelbrot set.
 \end_layout
 
 \begin_layout Standard
-In contrast, a Julia set is defined as the set of initial values of 
+In contrast,
+ a Julia set is defined as the set of initial values of 
 \begin_inset Formula $z_{0}$
 \end_inset
 
@@ -248,9 +268,8 @@ In contrast, a Julia set is defined as the set of initial values of
 \begin_inset Formula $z$
 \end_inset
 
- that diverge, the resulting iteration count is visualized using a image
- color value assigned to the pixel at the coordinate derived from the real
- and imaginary parts of 
+ that diverge,
+ the resulting iteration count is visualized using a image color value assigned to the pixel at the coordinate derived from the real and imaginary parts of 
 \begin_inset Formula $z_{0}$
 \end_inset
 
@@ -258,11 +277,9 @@ In contrast, a Julia set is defined as the set of initial values of
 \end_layout
 
 \begin_layout Standard
-If the specified number of threads defined is greater than 1 then image
- computation will be allocated to each thread in column sequence for the
- most equitable and efficient division of computational resources.
- Hopefully, it is obvious that the number of threads specified should be
- equal to or less than the available hardware cores or hyper threads.
+If the specified number of threads defined is greater than 1 then image computation will be allocated to each thread in column sequence for the most equitable and efficient division of computational resources.
+ Hopefully,
+ it is obvious that the number of threads specified should be equal to or less than the available hardware cores or hyper threads.
 \end_layout
 
 \begin_layout Section
@@ -282,10 +299,8 @@ Embedded REXX Macro Language
 \end_layout
 
 \begin_layout Standard
-This version of Fractal registers itself as an embedded Rexx interpreter
- which will process commands not directly understood by the Rexx macro processor.
- This effectively adds all the capabilities of the Rexx macro language to
- Fractal program macros.
+This version of Fractal registers itself as an embedded Rexx interpreter which will process commands not directly understood by the Rexx macro processor.
+ This effectively adds all the capabilities of the Rexx macro language to Fractal program macros.
 \end_layout
 
 \begin_layout Section
@@ -293,14 +308,18 @@ Command Reference:
 \end_layout
 
 \begin_layout Subsection
-reset(XRES, YRES, MAXITER, NTHREAD)
+reset(XRES,
+ YRES,
+ MAXITER,
+ NTHREAD)
 \end_layout
 
 \begin_layout Standard
-This command resets the image resolution, maximum number of iterations,
+This command resets the image resolution,
+ maximum number of iterations,
  and number of allocated threads.
- The resolution (XRES, YRES) defines the screen resolution of the generated
- image.
+ The resolution (XRES,
+ YRES) defines the screen resolution of the generated image.
  
 \end_layout
 
@@ -309,22 +328,20 @@ An example of this command is:
 \end_layout
 
 \begin_layout LyX-Code
-reset(1600, 1200, 4000, 4)
+reset 1600 1200 4000 4
 \end_layout
 
 \begin_layout Subsection
-palette(DMAX, SHIFT, COLORS...)
+spectrum(SHIFT,
+ [INDEX,
+ COLOR]...)
 \end_layout
 
 \begin_layout Standard
 This command sets the palette of color spectrum to the defined set of colors,
- with the gradient between color values defined by the DMAX parameter (number
- of color gradient values between defined color values).
- The SHIFT value defines the starting color value with zero (0) specifying
- the first color value.
- If the iteration value exceeds the maximum color value (number of colors
- multiplied by DMAX) then the color selected will cycle through the color
- spectrum starting with the first color value.
+ with the interpolation between color values defined by the difference in index values between entries.
+ The SHIFT value defines the starting color index.
+ If the iteration value exceeds the maximum color index then the modulus of the iteration (with SHIFT applied) value against the last color index will be used to select the color interval to interpolate between.
 \end_layout
 
 \begin_layout Standard
@@ -332,15 +349,34 @@ An example of this command is:
 \end_layout
 
 \begin_layout LyX-Code
-palette(64, 2, 070f19, 7B98F1, 010015, 2D62F3, 22010b, 4FDCE5)
+palette 0 25 000764 50 206bdd 100 edffff 150 ffaa00 215 310230
 \end_layout
 
 \begin_layout Subsection
-view(XC, YC, SIZE)
+view(XC,
+ YC,
+ SIZE,
+ SCALE)
 \end_layout
 
 \begin_layout Standard
 This command defines the fractal view center coordinates and size.
+ If the size parameter value divided by the horizontal resolution (XRES) is less than double epsilon (
+\begin_inset Formula $2.220446E-16$
+\end_inset
+
+) then arbitrary precision math will be used,
+ which will be a much higher cost in computation,
+ but allows for deep zoom of the Mandelbrot set.
+ The SCALE argument (default 0) is an integer that sets the grid size to 
+\begin_inset Formula $2^{SCALE}$
+\end_inset
+
+allowing for reduced computations with a sacrifice in resolution.
+ For a view size,
+ that triggers arbitrary precision math,
+ this scale value can be useful to obtain a generated fractal in shorter times,
+ with subsequent generations set to lower scale value for greater resolution.
 \end_layout
 
 \begin_layout Standard
@@ -348,29 +384,36 @@ An example of this command is:
 \end_layout
 
 \begin_layout LyX-Code
-view(0.0, 0.0, 2.6)
+view 0.0 0.0 2.6
 \end_layout
 
 \begin_layout Subsection
-fractal(TYPE, [CX, CY,] CTYPE)
+fractal(TYPE,
+ [CX,
+ CY,] CTYPE)
 \end_layout
 
 \begin_layout Standard
-This command initiates execution of a fractal image defined by the specified
- type (TYPE which currently only supports a value of 0 indicating the Mandelbrot
- set), escape type (CTYPE which may be the default 0 for 
+This command initiates execution of a fractal image defined by the specified type (TYPE which currently only supports a value of 0 indicating the Mandelbrot set),
+ escape type (CTYPE which may be the default 0 for 
 \begin_inset Formula $re(z)^{2}+im(z)^{2}$
 \end_inset
 
-, 1 for 
+,
+ 1 for 
 \begin_inset Formula $re(z^{2})$
 \end_inset
 
-, or 2 for 
+,
+ or 2 for 
 \begin_inset Formula $im(z^{2})$
 \end_inset
 
-), and, if specified, the Julia set defined at CX, CY.
+),
+ and,
+ if specified,
+ the Julia set defined at CX,
+ CY.
  
 \end_layout
 
@@ -379,30 +422,11 @@ An example of this command is:
 \end_layout
 
 \begin_layout LyX-Code
-fractal(0)
+fractal
 \end_layout
 
 \begin_layout LyX-Code
-fractal(0, 0.355534, -0.337292)
-\end_layout
-
-\begin_layout Subsection
-spectrum
-\end_layout
-
-\begin_layout Standard
-This command generates a linear image of the current defined color spectrum
- useful in assessing possible definitions for use in fractal image generation.
- Execution of this command will typically be followed by a 'save' command
- to enable visual review of a defined spectrum.
-\end_layout
-
-\begin_layout Standard
-An example of this command is:
-\end_layout
-
-\begin_layout LyX-Code
-spectrum
+fractal 0 0.355534 -0.337292
 \end_layout
 
 \begin_layout Subsection
@@ -410,14 +434,14 @@ save(FILENAME)
 \end_layout
 
 \begin_layout Standard
-This command will save a generated image to a file.
+This command will save a generated fractal solution to a file.
 \end_layout
 
 \begin_layout Standard
-The FILENAME argument specifies a file to save the resulting image to.
- The file output will be in portable bit map (PBM) format.
- If the file name begins with a pipe ('|') then the output will be provided
- as a standard input stream to the specified process.
+The FILENAME argument specifies a file to save the resulting fractal solution to.
+ The file output will be in an interchange file format (IFF) format with binary chunks specific to fractal solution data elements.
+ If the file name begins with a pipe ('|') then the output will be provided as a standard input stream to the specified process.
+ An ancillary program 'ffftoppm' is provided for converting a fractal solution IFF file into a portable pixmap (PPM).
 \end_layout
 
 \begin_layout Standard
@@ -425,7 +449,61 @@ An example of this command is:
 \end_layout
 
 \begin_layout LyX-Code
-save(|pnmtojpeg -quality 90 > output.jpg)
+save(|ffftoppm|pnmtojpeg -quality 90 > output.jpg)
+\end_layout
+
+\begin_layout Subsection
+read(FILENAME)
+\end_layout
+
+\begin_layout Standard
+This command will read in a previous generated fractal solution,
+ including all parameters used.
+ These parameters may be accessed in a Rexx macro from the following stem variables:
+\end_layout
+
+\begin_layout Itemize
+display.xres
+\end_layout
+
+\begin_layout Itemize
+display.yres
+\end_layout
+
+\begin_layout Itemize
+display.scale
+\end_layout
+
+\begin_layout Itemize
+fractal.xc
+\end_layout
+
+\begin_layout Itemize
+fractal.yc
+\end_layout
+
+\begin_layout Itemize
+fractal.size
+\end_layout
+
+\begin_layout Standard
+An example of this command is:
+\end_layout
+
+\begin_layout LyX-Code
+read fractal.fff
+\end_layout
+
+\begin_layout Subsection
+display
+\end_layout
+
+\begin_layout Standard
+An example of this command is:
+\end_layout
+
+\begin_layout LyX-Code
+display
 \end_layout
 
 \begin_layout Section
@@ -437,23 +515,52 @@ Example
 \end_layout
 
 \begin_layout LyX-Code
-reset 3200 2400 4000 4
+numeric digits 96
 \end_layout
 
 \begin_layout LyX-Code
-view 0.0 0.0 2.6
+xc = -0.1706437852373184679617758251927816599075035888542000671970417
 \end_layout
 
 \begin_layout LyX-Code
-fractal 0 1 0.355534 '-0.337292'
+yc = -1.0896842951946751322677841758839255976081517219447041536757500
 \end_layout
 
 \begin_layout LyX-Code
-'save(|pnmtojpeg -quality 90 > julia.jpg)'
+w = 1.25E-55
 \end_layout
 
 \begin_layout LyX-Code
-exit 
+reset 640 640 50000 16
+\end_layout
+
+\begin_layout LyX-Code
+spectrum 0 25 000764 50 206bdd 100 edffff 150 ffaa00 215 310230
+\end_layout
+
+\begin_layout LyX-Code
+view xc yc w
+\end_layout
+
+\begin_layout LyX-Code
+fractal
+\end_layout
+
+\begin_layout LyX-Code
+'save(|ffftoppm|pnmtopng -compression 9 > fractal.png)'
+\end_layout
+
+\begin_layout LyX-Code
+exit
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename fractal.png
+
+\end_inset
+
+
 \end_layout
 
 \end_body
