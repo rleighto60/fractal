@@ -1,261 +1,170 @@
-#include "display.h"
 #include "fractal.h"
 #include "iff.h"
+#include <X11/X.h>
+#include <X11/Xlib.h>
 
-int isPipe = FALSE;
-int *image = NULL;
-float *buf = NULL;
-UBYTE color[3];
-struct ViewData viewData;
-struct FractalData data;
-struct ColorData colorData;
-static cairo_surface_t *surface = NULL;
+extern float *buf;
+extern int read_iff(char *file);
+extern int save_iff(char *file);
+extern void close_buf();
+extern void palette(void (*update_image)());
+extern struct ViewData viewData;
+extern UBYTE *get_color(float fiter);
 
-/* Open stream. If file specification begins with '|' then open as a piped
- stream otherwise open as a file */
+char *file;
+int *image = NULL, zoom = 1;
+long xres = 1200, yres = 1200;
+Display *display = NULL;
+XImage *ximage;
+Window window;
 
-FILE *open_file(char *fspec, char *mode) {
-  if (*fspec == '|') {
-    ++fspec;
-    isPipe = TRUE;
-    return popen(fspec, mode);
-  } else {
-    isPipe = FALSE;
-    return fopen(fspec, mode);
+void teardown() {
+  if (display != NULL) {
+    XCloseDisplay(display);
+    XDestroyWindow(display, window);
+    display = NULL;
+  }
+  if (image != NULL) {
+    free(image);
+    image = NULL;
   }
 }
 
-/* Close stream. */
-
-int close_file(FILE *stream) {
-  int rc = 0;
-
-  if (isPipe)
-    rc = pclose(stream);
-  else
-    rc = fclose(stream);
-  isPipe = FALSE;
-
-  return rc;
-}
-
-int read_iff(char *file) {
-  FILE *fp;
-  struct Chunk header;
-  long id, buflen;
-
-  if (file == 0)
-    fp = stdin;
-  else if ((fp = fopen(file, "r")) == NULL)
-    return (0);
-
-  SafeRead(fp, &header, sizeof(header));
-  if (header.ckID != ID_FORM) {
-    fclose(fp);
-    return (0);
-  }
-
-  SafeRead(fp, &id, sizeof(id));
-  if (id != ID_FRCL) {
-    fclose(fp);
-    return (0);
-  }
-
-  for (;;) {
-    SafeRead(fp, &header, sizeof(header));
-    if (header.ckID == ID_ENDD)
-      break;
-
-    switch (header.ckID) {
-    case ID_GLBL:
-      SafeRead(fp, &viewData, sizeof(struct ViewData));
-      SafeRead(fp, &data, sizeof(struct FractalData));
-      SafeRead(fp, &colorData, sizeof(struct ColorData));
-      break;
-    case ID_DATA:
-      buflen = viewData.xres * viewData.yres;
-
-      if ((buf = calloc((long)buflen, sizeof(float))) == NULL) {
-        fprintf(stderr, "main - insufficient memory!!!\n");
-        return (0);
-      }
-      SafeRead(fp, buf, buflen * sizeof(float));
-
-      if ((image = calloc((long)buflen, sizeof(int))) == NULL) {
-        fprintf(stderr, "main - insufficient memory!!!\n");
-      }
-
-      break;
-    }
-  }
-  fclose(fp);
-  return (1);
-}
-
-static UBYTE *get_color(float fiter, int nindex, int shift,
-                        int indices[MAX_INDICES], UBYTE comps[3][MAX_INDICES]) {
-  int nc;
-  if (fiter < 0.0) {
-    for (nc = 0; nc < 3; nc++)
-      color[nc] = 0;
-  } else {
-    int nlast = nindex - 1;
-    float riter = fmodf(fiter + (float)shift, (float)indices[nlast]);
-    float rf;
-    int ni;
-    UBYTE comp1, comp2;
-
-    for (ni = 0; ni <= nlast; ni++) {
-      if (indices[ni] > riter)
-        break;
-    }
-    // if in the first interval or after the last then interpolate between last
-    // and first colors
-    if (ni == 0 || ni > nlast) {
-      if (indices[0] > 0) {
-        rf = riter / (float)indices[0];
-        for (nc = 0; nc < 3; nc++) {
-          comp1 = comps[nc][nlast];
-          comp2 = comps[nc][0];
-          color[nc] = (UBYTE)((float)comp1 + (float)(comp2 - comp1) * rf);
-        }
-      } else {
-        for (nc = 0; nc < 3; nc++)
-          color[nc] = comps[nc][0];
-      }
-    }
-    // otherwise interpolate between colors at the start and end of the interval
-    else {
-      if (indices[ni] > indices[ni - 1]) {
-        rf = (riter - (float)indices[ni - 1]) /
-             (float)(indices[ni] - indices[ni - 1]);
-        for (nc = 0; nc < 3; nc++) {
-          comp1 = comps[nc][ni - 1];
-          comp2 = comps[nc][ni];
-          color[nc] = (UBYTE)((float)comp1 + (float)(comp2 - comp1) * rf);
-        }
-      } else {
-        for (nc = 0; nc < 3; nc++)
-          color[nc] = comps[nc][ni];
-      }
-    }
-  }
-  return color;
-}
-
-static void render_image(GtkDrawingArea *area, cairo_t *cr, int width,
-                          int height, gpointer user_data) {
-  long i, j, pos = 0;
-  float fiter;
+int get_zoom_color(long x, long y) {
+  int n = 0;
+  long i, j, pos;
+  float fiter = 0.0, titer = 0.0;
   UBYTE *c;
 
-  pos = 0;
+  pos = (viewData.xres * y + x) * zoom;
+  for (i = 0; i < zoom; i++) {
+    for (j = 0; j < zoom; j++) {
+      fiter = buf[pos + (viewData.xres * i) + j];
+      if (fiter >= 0) {
+        titer += fiter;
+        n++;
+      }
+    }
+  }
+  if (n > 0)
+    fiter = titer / n;
+  c = get_color(fiter);
+  return c[0] << 16 | c[1] << 8 | c[2];
+}
 
-  for (j = 0; j < viewData.yres; j++) {
-    for (i = 0; i < viewData.xres; i++) {
-      fiter = buf[pos++];
-      c = get_color(fiter, colorData.nindex, colorData.shift, colorData.indices,
-                    colorData.comps);
-      image[pos] = c[0] << 16 | c[1] << 8 | c[2];
+void update_image() {
+  long x, y, pos;
+
+  for (y = 0; y < yres; y++) {
+    for (x = 0; x < xres; x++) {
+      pos = xres * y + x;
+      image[pos] = get_zoom_color(x, y);
     }
   }
 
-  cairo_set_source_surface(cr, surface, 0, 0);
-  cairo_paint(cr);
+  XPutImage(display, window, DefaultGC(display, 0), ximage, 0, 0, 0, 0, xres,
+            yres);
 }
 
-static void close_window(GtkWindow *win) {
-  if (surface)
-    cairo_surface_destroy(surface);
-  gtk_window_close(win);
-  if (buf)
-    free(buf);
-  if (image)
-    free(image);
-}
+void init_display() {
+  if (display == NULL) {
+    xres = viewData.xres / zoom;
+    yres = viewData.yres / zoom;
 
-static void
-primary (GtkGestureClick *gesture,
-         int              n_press,
-         double           x,
-         double           y,
-         GtkWidget       *area)
-{
-  double dx, dy;
+    long buflen = xres * yres;
 
-  if (viewData.xres > viewData.yres) {
-    dx = data.size * (double)viewData.xres / viewData.yres;
-    dy = data.size;
-  } else {
-    dx = data.size;
-    dy = data.size * (double)viewData.yres / viewData.xres;
+    if ((image = calloc((long)buflen, sizeof(int))) == NULL) {
+      fprintf(stderr, "main - insufficient memory!!!\n");
+    }
+
+    display = XOpenDisplay(NULL);
+    Visual *visual = DefaultVisual(display, 0);
+    ximage = XCreateImage(display, visual,
+                          DefaultDepth(display, DefaultScreen(display)),
+                          ZPixmap, 0, (char *)image, xres, yres, 32, 0);
+    window = XCreateSimpleWindow(display, RootWindow(display, 0), 0, 0, xres,
+                                 yres, 1, 0, 0);
+
+    XSelectInput(display, window,
+                 ButtonPressMask | KeyPressMask | ExposureMask);
+    XMapWindow(display, window);
   }
-
-  double fx = data.xc + dx * ((x / viewData.xres) - 0.5);
-  double fy = data.yc + dy * ((y / viewData.yres) - 0.5);
-
-  printf("1 %g %g\n", fx, fy);
 }
 
-static void
-secondary (GtkGestureClick *gesture,
-         int              n_press,
-         double           x,
-         double           y,
-         GtkWidget       *area)
-{
-  printf("2 %g %g\n", x, y);
+int process_event() {
+  Atom wmDeleteWindow = XInternAtom(display, "WM_DELETE_WINDOW", FALSE);
+  XEvent ev;
+
+  XSetWMProtocols(display, window, &wmDeleteWindow, 1);
+  XNextEvent(display, &ev);
+
+  switch (ev.type) {
+  case Expose:
+    XPutImage(display, window, DefaultGC(display, 0), ximage, 0, 0, 0, 0, xres,
+              yres);
+    break;
+  case ButtonPress:
+    if (ev.xbutton.button == 4) {
+      zoom++;
+    } else if (ev.xbutton.button == 5) {
+      if (zoom > 1)
+        zoom--;
+    } else {
+      close_buf();
+      teardown();
+      return FALSE;
+    }
+    printf("%d\n", zoom);
+    teardown();
+    break;
+  case KeyPress:
+    switch (ev.xkey.keycode) {
+    case 9: // Esc
+      close_buf();
+      teardown();
+      return FALSE;
+    case 33: // p - palette
+      palette(update_image);
+      break;
+    case 27: // r - reset
+      break;
+    case 39: // s - save
+      save_iff(file);
+      break;
+    }
+    printf("key code %d\n", ev.xkey.keycode);
+    break;
+  case ClientMessage:
+    // handle close window gracefully
+    if (ev.xclient.data.l[0] == wmDeleteWindow) {
+      close_buf();
+      teardown();
+      return FALSE;
+    }
+    break;
+  }
+  return TRUE;
 }
-
-static void activate(GApplication *app, gpointer data) {
-  GtkWidget *win = gtk_application_window_new(GTK_APPLICATION(app));
-  GtkWidget *area = gtk_drawing_area_new();
-  GtkGesture *first, *second;
-
-  g_signal_connect(win, "destroy", G_CALLBACK(close_window), win);
-
-  int stride = cairo_format_stride_for_width(CAIRO_FORMAT_RGB24, viewData.xres);
-  surface = cairo_image_surface_create_for_data(
-      (UBYTE *)image, CAIRO_FORMAT_RGB24, viewData.xres, viewData.yres, stride);
-
-  gtk_window_set_title(GTK_WINDOW(win), "fractal");
-  gtk_window_set_default_size(GTK_WINDOW(win), viewData.xres, viewData.yres);
-  gtk_drawing_area_set_draw_func(GTK_DRAWING_AREA(area), render_image, NULL,
-                                 NULL);
-  first = gtk_gesture_click_new ();
-  gtk_gesture_single_set_button (GTK_GESTURE_SINGLE (first), GDK_BUTTON_PRIMARY);
-  gtk_widget_add_controller (area, GTK_EVENT_CONTROLLER (first));
-
-  g_signal_connect (first, "pressed", G_CALLBACK (primary), area);
-  second = gtk_gesture_click_new ();
-  gtk_gesture_single_set_button (GTK_GESTURE_SINGLE (second), GDK_BUTTON_SECONDARY);
-  gtk_widget_add_controller (area, GTK_EVENT_CONTROLLER (second));
-
-  g_signal_connect (second, "pressed", G_CALLBACK (secondary), area);
-  gtk_window_set_child(GTK_WINDOW(win), area);
-
-  gtk_window_present(GTK_WINDOW(win));
-}
-
-#define APPLICATION_ID "org.rl8n.display"
 
 int main(int argc, char **argv) {
-  GtkApplication *app;
-  char *input;
+  int open = TRUE;
 
   if (argc > 1)
-    input = argv[1];
+    file = argv[1];
   else
-    input = 0;
+    file = 0;
 
-  if (!read_iff(input)) {
+  if (!read_iff(file)) {
     free(buf);
     fprintf(stderr, "main - error reading image!!!\n");
     return 0;
   }
 
-  app = gtk_application_new(APPLICATION_ID, G_APPLICATION_DEFAULT_FLAGS);
-  g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
-  g_application_run(G_APPLICATION(app), 0, NULL);
-  g_object_unref(app);
+  while (open) {
+    if (display == NULL) {
+      init_display();
+      update_image();
+    }
+    open = process_event();
+  }
 }

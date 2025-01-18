@@ -118,7 +118,7 @@ void generate_fractal(int x1) {
   double xi, x0, y0, xc, yc, size;
   double complex z;
   long pos;
-  int dx, dy;
+  int dx, dy, grid;
   struct Coord delta;
 
   sscanf(data.size, "%lg", &size);
@@ -126,9 +126,10 @@ void generate_fractal(int x1) {
   sscanf(data.yc, "%lg", &yc);
   delta = get_delta(viewData, size);
 
-  dx = nthread * viewData.scale;
-  dy = viewData.scale;
-  xi = x1 * viewData.scale;
+  grid = 1 << viewData.scale;
+  dx = nthread * grid;
+  dy = grid;
+  xi = x1 * grid;
 
   for (int py = 0; py < viewData.yres; py += dy) {
     y = get_world_ord(delta.y, yc, py, viewData.yres);

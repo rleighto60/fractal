@@ -4,7 +4,7 @@ PKGCONFIG = $(shell which pkg-config)
 CFLAGS = $(shell $(PKGCONFIG) --cflags gtk4)
 LIBS = $(shell $(PKGCONFIG) --libs gtk4)
 
-all: ../bin/fractal ../bin/ifftoppm ../bin/iffinfo
+all: ../bin/fractal ../bin/ifftoppm ../bin/iffinfo ../bin/display
 
 test: ../bin/arbfunctest ../bin/arbfractaltest
 
@@ -17,6 +17,9 @@ test: ../bin/arbfunctest ../bin/arbfractaltest
 ../bin/iffinfo:iffinfo.o iff.o
 	$(CC) -o ../bin/iffinfo iffinfo.o iff.o -lm
 
+../bin/display:display.o palette.o iff.o
+	$(CC) -o ../bin/display display.o palette.o iff.o -lX11 -lm
+
 ../bin/arbfunctest: arbfunctest.o fractalfunc.o complexfunc.o arbfunc.o iff.o
 	$(CC) -o ../bin/arbfunctest arbfunctest.o fractalfunc.o complexfunc.o arbfunc.o iff.o -lm -lflint
 
@@ -26,11 +29,17 @@ test: ../bin/arbfunctest ../bin/arbfractaltest
 fractal.o:  fractal.c fractal.h iff.h
 	$(CC) -c -o fractal.o fractal.c
 
+palette.o:  palette.c fractal.h iff.h
+	$(CC) -c -o palette.o palette.c
+
 ifftoppm.o:  ifftoppm.c fractal.h iff.h
 	$(CC) -c -o ifftoppm.o ifftoppm.c
 
 iffinfo.o:  iffinfo.c fractal.h iff.h
 	$(CC) -c -o iffinfo.o iffinfo.c
+
+display.o:  display.c fractal.h iff.h
+	$(CC) -c -o display.o display.c
 
 iff.o:    iff.c
 	$(CC) -c -o iff.o iff.c

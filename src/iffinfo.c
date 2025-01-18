@@ -10,7 +10,7 @@ extern int read_iff(char *file);
 
 void print_info() {
   int i;
-  printf("size %ld %ld\n", viewData.xres, viewData.yres);
+  printf("size %ld %ld %d\n", viewData.xres, viewData.yres, viewData.scale);
   printf("view %s %s %s\n", data.xc, data.yc, data.size);
   printf("spectrum %d ", colorData.shift);
   for (i = 0; i < colorData.nindex; ++i) {

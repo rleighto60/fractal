@@ -211,7 +211,7 @@ void arb_generate_fractal(int x1) {
   acb_t z, c;
   arb_t xc, yc, size;
   long pos;
-  int xi, dx, dy;
+  int xi, dx, dy, grid;
   struct Coord delta;
 
   arb_init(x);
@@ -230,9 +230,10 @@ void arb_generate_fractal(int x1) {
 
   arb_get_delta(&delta, viewData, size);
 
-  dx = nthread * viewData.scale;
-  dy = viewData.scale;
-  xi = x1 * viewData.scale;
+  grid = 1 << viewData.scale;
+  dx = nthread * grid;
+  dy = grid;
+  xi = x1 * grid;
 
   for (long py = 0; py < viewData.yres; py += dy) {
     arb_get_world_ord(y, delta.y, yc, py, viewData.yres);
@@ -245,7 +246,7 @@ void arb_generate_fractal(int x1) {
         buf[pos] = arb_iterate(z, c);
       }
     }
-    printf("%ld %%\r", 100 * py / viewData.yres);
+    printf("%ld %% \r", 100 * py / viewData.yres);
     fflush(stdout);
   }
 

@@ -31,9 +31,8 @@ extern struct FractalData data;
 extern struct ViewData viewData;
 extern struct ColorData colorData;
 
-extern UBYTE *get_color(float fiter, int nindex, int shift,
-                        int indices[MAX_INDICES], UBYTE comps[3][MAX_INDICES]);
-extern int read_iff(char *file, int icd);
+extern UBYTE *get_color(float fiter);
+extern int read_iff(char *file);
 extern int save_iff(char *file);
 extern int parse(char *input, char *args[], int narg);
 extern void wait();
@@ -87,20 +86,6 @@ void init_display() {
     XSelectInput(display, window, ButtonPressMask | ExposureMask);
     XMapWindow(display, window);
   }
-}
-
-int setup(int initDisplay) {
-  long buflen;
-
-  buflen = open_buf();
-
-  if (buflen == 0) {
-    return (0);
-  }
-  if (initDisplay) {
-    init_display();
-  }
-  return (1);
 }
 
 void teardown() {
@@ -164,25 +149,23 @@ void check_buttonpress() {
 }
 
 void update_image() {
-  int open = TRUE, color;
+  int open = TRUE, color, grid;
   long i, j, x, y, pos;
   float fiter;
   UBYTE *c;
 
-  printf("reset %ld %ld %d\n", viewData.xres, viewData.yres, viewData.scale);
-  printf("view %s %s %s\n", data.xc, data.yc, data.size);
-  for (y = 0; y < viewData.yres; y += viewData.scale) {
-    for (x = 0; x < viewData.xres; x += viewData.scale) {
+  grid = 1 << viewData.scale;
+  for (y = 0; y < viewData.yres; y += grid) {
+    for (x = 0; x < viewData.xres; x += grid) {
       pos = viewData.xres * y + x;
       fiter = buf[pos];
-      c = get_color(fiter, colorData.nindex, colorData.shift, colorData.indices,
-                    colorData.comps);
+      c = get_color(fiter);
       color = c[0] << 16 | c[1] << 8 | c[2];
-      if (viewData.scale == 1)
+      if (grid == 1)
         image[pos] = color;
       else {
-        for (i = 0; i < viewData.scale; i++) {
-          for (j = 0; j < viewData.scale; j++) {
+        for (i = 0; i < grid; i++) {
+          for (j = 0; j < grid; j++) {
             image[pos + (viewData.xres * i) + j] = color;
           }
         }
@@ -193,7 +176,7 @@ void update_image() {
   XPutImage(display, window, DefaultGC(display, 0), ximage, 0, 0, 0, 0,
             viewData.xres, viewData.yres);
 
-  if (viewData.scale == 1) {
+  if (grid == 1) {
     while (open) {
       open = process_event();
     }
@@ -221,7 +204,7 @@ void init_color_data() {
 void reset() {
   viewData.xres = 320L;
   viewData.yres = 200L;
-  viewData.scale = 1;
+  viewData.scale = 0;
   strcpy(data.xc, "-0.75");
   strcpy(data.yc, "0.0");
   strcpy(data.x0, "0.0");
@@ -282,18 +265,15 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
     switch (nc) {
 
     /*******************************************************************************
-     reset(xres,yres,maxIter,nthread,display) - reset
+     reset(xres,yres,maxIter,nthread) - reset
      where:   xres    = x resolution of view
               yres    = y resolution of view
               maxIter = maximum number of iterations
               nthread = number of threads
-              display = open display if true
-     result:  none
      *******************************************************************************/
     case 0:
       n = 0;
       wait();
-      teardown();
       reset();
       if (argn > 1)
         sscanf(args[1], "%ld", &viewData.xres);
@@ -303,9 +283,7 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
         sscanf(args[3], "%d", &maxIter);
       if (argn > 4)
         sscanf(args[4], "%d", &nthread);
-      if (argn > 5)
-        sscanf(args[5], "%d", &n);
-      if (!setup(n)) {
+      if (!open_buf()) {
         fprintf(stderr, "main - could not allocate memory for bitmap\n");
         return 0;
       }
@@ -317,15 +295,14 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
       break;
 
     /*******************************************************************************
-     view(xc,yc,size) - view
+     view(xc,yc,size,scale) - view
      where:   xc    = center x coordinate
               yc    = center y coordinate
               size  = size
-              scale = scale (scaling view by dividing resolution by 2 ^ scale)
-     default 0) result:  none
+              scale = scale (grid size = 2 ^ scale) default 0
      *******************************************************************************/
     case 1:
-      scale = 1;
+      scale = 0;
       if (argn > 1)
         strcpy(data.xc, args[1]);
       if (argn > 2)
@@ -333,8 +310,7 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
       if (argn > 3)
         strcpy(data.size, args[3]);
       if (argn > 4) {
-        sscanf(args[4], "%d", &n);
-        scale = 1 << n;
+        sscanf(args[4], "%d", &scale);
       }
       if (viewData.scale <= scale) {
         clear_buf();
@@ -343,10 +319,11 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
       break;
 
     /*******************************************************************************
-     fractal(type,[cx,cy,]ctype) - generate fractal (julia if c0 = cx + cy I
-     defined) where:   type  = 0 (MANDEL) cx    = constant x coordinate cy    =
-     constant y coordinate ctype = escape type (0 = re(z^2) + im(r^2), 1 =
-     re(z^2), 2 = im(z^2)) result:  none
+     fractal(type,[cx,cy,]ctype) - generate fractal (julia if c0 = cx + cy I defined)
+     where:   type  = 0 (MANDEL)
+              cx    = constant x coordinate
+              cy    = constant y coordinate
+              ctype = escape type (0 = re(z)^2 + im(z)^2, 1 = re(z^2), 2 = im(z^2))
      *******************************************************************************/
     case 2:
       if (argn > 1)
@@ -378,36 +355,28 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
       break;
 
     /*******************************************************************************
-     read(filename,display) - read image
-     where:   filename = the name of the file to store image
-              display = open display if true
-     result:  none
+     read(filename) - read image
+     where:   filename = the name of the file to load image from
      *******************************************************************************/
     case 3:
       if (argn > 1) {
         strcpy(file, args[1]);
-        if (!read_iff(file, 1)) {
+        if (!read_iff(file)) {
           fprintf(stderr, "main - could not read file: %s\n", file);
           return 0;
         }
       }
-      if (argn > 2)
-        sscanf(args[2], "%d", &n);
-      if (n) {
-        init_display();
-      }
-      if (display != NULL) {
-        update_image();
-      }
       set_rexx_var("FRACTAL.XC", data.xc);
       set_rexx_var("FRACTAL.YC", data.yc);
       set_rexx_var("FRACTAL.SIZE", data.size);
+      set_rexx_int("DISPLAY.XRES", viewData.xres);
+      set_rexx_int("DISPLAY.YRES", viewData.yres);
+      set_rexx_int("DISPLAY.SCALE", viewData.scale);
       break;
 
     /*******************************************************************************
      save(filename) - save image
-     where:   filename = the name of the file to store image
-     result:  none
+     where:   filename = the name of the file to store image to
      *******************************************************************************/
     case 4:
       if (argn > 1) {
@@ -418,33 +387,27 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
 
     /*******************************************************************************
      display() - display image
-     result:  none
      *******************************************************************************/
     case 5:
-      // display_image();
+      init_display();
+      if (display != NULL) {
+        update_image();
+      }
       break;
 
     /*******************************************************************************
-     spectrum(scale, shift, {index, color}...) - set spectrum
-     where:   scale    = the color spectrum scale factor (see note 2)
-              shift    = the color spectrum shift (scaled)
-              index    = a color index value (scaled)
+     spectrum(shift, [index, color]...) - set spectrum
+     where:   shift    = the color spectrum shift
+              index    = a color index value
               color    = a color value
-     result:  none
-     notes :  (1) color spectrum will be stretched by multplying shift and
-     indices by the amount specified by scale
      *******************************************************************************/
     case 6:
       init_color_data();
       if (argn > 1) {
-        sscanf(args[1], "%d", &scale);
+        sscanf(args[1], "%d", &colorData.shift);
       }
       if (argn > 2) {
-        sscanf(args[2], "%d", &n);
-        colorData.shift = scale * n;
-      }
-      if (argn > 3) {
-        colorData.nindex = (argn - 3) / 2;
+        colorData.nindex = (argn - 2) / 2;
         if (colorData.nindex >= MAX_INDICES) {
           fprintf(stderr,
                   "main - number of palette indices must be less than %d\n",
@@ -452,9 +415,9 @@ APIRET APIENTRY handler(PRXSTRING command, PUSHORT flags,
           return (0);
         }
         for (i = 0; i < colorData.nindex; ++i) {
-          if (sscanf(args[i * 2 + 3], "%d", &n) == 1)
-            colorData.indices[i] = scale * n;
-          if (sscanf(args[i * 2 + 4], "%2x%2x%2x", &r, &g, &b) == 3) {
+          if (sscanf(args[i * 2 + 2], "%d", &n) == 1)
+            colorData.indices[i] = n;
+          if (sscanf(args[i * 2 + 3], "%2x%2x%2x", &r, &g, &b) == 3) {
             colorData.comps[0][i] = r;
             colorData.comps[1][i] = g;
             colorData.comps[2][i] = b;

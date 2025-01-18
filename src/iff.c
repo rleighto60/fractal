@@ -3,18 +3,24 @@
 #include <math.h>
 #include <stdio.h>
 
-float *buf;
+float *buf = NULL;
 UBYTE color[3];
 int pipe = FALSE;
 struct FractalData data;
 struct ViewData viewData;
 struct ColorData colorData, ignoreColorData;
 
+void close_buf() { 
+  if (buf != NULL) free(buf);
+  buf = NULL;
+}
+
 long open_buf() {
   long buflen;
 
   buflen = viewData.xres * viewData.yres;
 
+  close_buf();
   if ((buf = calloc((long)buflen, sizeof(float))) == NULL) {
     fprintf(stderr, "main - insufficient memory!!!\n");
     return (0);
@@ -31,53 +37,50 @@ void clear_buf() {
     buf[pos] = 0.0;
 }
 
-void close_buf() { free(buf); }
-
-UBYTE *get_color(float fiter, int nindex, int shift, int indices[MAX_INDICES],
-                 UBYTE comps[3][MAX_INDICES]) {
+UBYTE *get_color(float fiter) {
   int nc;
   if (fiter < 0.0) {
     for (nc = 0; nc < 3; nc++)
       color[nc] = 0;
   } else {
-    int nlast = nindex - 1;
-    float riter = fmodf(fiter + (float)shift, (float)indices[nlast]);
+    int nlast = colorData.nindex - 1;
+    float riter = fmodf(fiter + (float)colorData.shift, (float)colorData.indices[nlast]);
     float rf;
     int ni;
     UBYTE comp1, comp2;
 
     for (ni = 0; ni <= nlast; ni++) {
-      if (indices[ni] > riter)
+      if (colorData.indices[ni] > riter)
         break;
     }
     // if in the first interval or after the last then interpolate between last
     // and first colors
     if (ni == 0 || ni > nlast) {
-      if (indices[0] > 0) {
-        rf = riter / (float)indices[0];
+      if (colorData.indices[0] > 0) {
+        rf = riter / (float)colorData.indices[0];
         for (nc = 0; nc < 3; nc++) {
-          comp1 = comps[nc][nlast];
-          comp2 = comps[nc][0];
+          comp1 = colorData.comps[nc][nlast];
+          comp2 = colorData.comps[nc][0];
           color[nc] = (UBYTE)((float)comp1 + (float)(comp2 - comp1) * rf);
         }
       } else {
         for (nc = 0; nc < 3; nc++)
-          color[nc] = comps[nc][0];
+          color[nc] = colorData.comps[nc][0];
       }
     }
     // otherwise interpolate between colors at the start and end of the interval
     else {
-      if (indices[ni] > indices[ni - 1]) {
-        rf = (riter - (float)indices[ni - 1]) /
-             (float)(indices[ni] - indices[ni - 1]);
+      if (colorData.indices[ni] > colorData.indices[ni - 1]) {
+        rf = (riter - (float)colorData.indices[ni - 1]) /
+             (float)(colorData.indices[ni] - colorData.indices[ni - 1]);
         for (nc = 0; nc < 3; nc++) {
-          comp1 = comps[nc][ni - 1];
-          comp2 = comps[nc][ni];
+          comp1 = colorData.comps[nc][ni - 1];
+          comp2 = colorData.comps[nc][ni];
           color[nc] = (UBYTE)((float)comp1 + (float)(comp2 - comp1) * rf);
         }
       } else {
         for (nc = 0; nc < 3; nc++)
-          color[nc] = comps[nc][ni];
+          color[nc] = colorData.comps[nc][ni];
       }
     }
   }
@@ -107,7 +110,7 @@ int close_file(FILE *stream) {
   return rc;
 }
 
-int read_iff(char *file, int icd) {
+int read_iff(char *file) {
   FILE *fp;
   struct Chunk header;
   long id, buflen;
@@ -138,11 +141,7 @@ int read_iff(char *file, int icd) {
     case ID_GLBL:
       SafeRead(fp, &data, sizeof(struct FractalData));
       SafeRead(fp, &viewData, sizeof(struct ViewData));
-      if (icd) {
-        SafeRead(fp, &ignoreColorData, sizeof(struct ColorData));
-      } else {
-        SafeRead(fp, &colorData, sizeof(struct ColorData));
-      }
+      SafeRead(fp, &colorData, sizeof(struct ColorData));
       break;
     case ID_DATA:
       if ((buflen = open_buf())) {
