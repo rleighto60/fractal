@@ -70,6 +70,7 @@ int find_color_index(int n) {
   return nclosest;
 }
 
+// set current hue, saturation, intensity values from specified rgb value
 void rgb2hsl(int rgb) {
   double r = (rgb >> 16) / 255.0;
   double g = ((rgb >> 8) & 0x0000ff) / 255.0;
@@ -96,6 +97,7 @@ void rgb2hsl(int rgb) {
   }
 }
 
+// get rgb color from rgb component values
 int rgb2color(double r, double g, double b) {
   UBYTE c[3];
 
@@ -105,6 +107,7 @@ int rgb2color(double r, double g, double b) {
   return c[0] << 16 | c[1] << 8 | c[2];
 }
 
+// get rgb color from hsl component values
 int hsl2rgb(double h, double s, double l) {
   int color = 0;
   double c = 0.0, m = 0.0, x = 0.0;
@@ -130,11 +133,13 @@ int hsl2rgb(double h, double s, double l) {
   return color;
 }
 
+// get interpolated color value at palette position
 int get_palette_color(long x) {
   int indice = FALSE;
   UBYTE *c;
 
   if (x == colorData.indices[color_index]) {
+    // x is at selected indice so return highlight color (light gray)
     return 0xcccccc;
   } else {
     for (int i = 0; i < colorData.nindex; i++) {
@@ -142,12 +147,15 @@ int get_palette_color(long x) {
         indice = TRUE;
     }
     if (indice)
+      // x is at an indice so return marker color (black)
       return 0;
+    // otherwise return interpolated color
     c = get_color((float)x);
     return c[0] << 16 | c[1] << 8 | c[2];
   }
 }
 
+// add color indice at palette position
 void add_color_index(long x) {
   int ipos = -1;
   UBYTE *c = get_color((float)x);
@@ -157,14 +165,14 @@ void add_color_index(long x) {
       ipos = i;
   }
   ipos++;
-  // Shift indices and color components to the right
+  // shift indices and color components to the right
   for (int i = colorData.nindex; i > ipos; i--) {
     colorData.indices[i] = colorData.indices[i - 1];
     for (int j = 0; j < 3; j++)
       colorData.comps[j][i] = colorData.comps[j][i - 1];
   }
 
-  // Insert the indice and color components
+  // insert the indice and color components
   colorData.indices[ipos] = (int)x;
   for (int j = 0; j < 3; j++)
     colorData.comps[j][ipos] = c[j];
@@ -172,9 +180,10 @@ void add_color_index(long x) {
   color_index = ipos;
 }
 
+// remove color indice at current selected index
 void remove_color_index() {
   int nlast = colorData.nindex - 1;
-  // Shift indices and color components to the left to "remove" the index
+  // shift indices and color components to the left to "remove" the index
   for (int i = color_index; i < nlast; i++) {
     colorData.indices[i] = colorData.indices[i + 1];
     for (int j = 0; j < 3; j++)
@@ -183,6 +192,7 @@ void remove_color_index() {
   colorData.nindex--;
 }
 
+// update palette selection panels
 void update_palette_image() {
   long x, y, pos, hpos, ipos, spos;
   int color;
@@ -192,6 +202,7 @@ void update_palette_image() {
   ipos = (long)(intensity * palette_width);
   spos = (long)((1.0 - saturation) * (hsl_height - palette_height)) +
          palette_height;
+  // generate palette
   for (x = 0; x < palette_width; x++) {
     color = get_palette_color(x);
     for (y = 0; y < palette_height; y++) {
@@ -200,20 +211,28 @@ void update_palette_image() {
     }
   }
   if (hue >= 0) {
+    // generate hsl selection panel
     for (x = 0; x < palette_width; x++) {
       i = (double)x / palette_width;
+      // generate intensity (x) by saturation (y) selection
       for (y = palette_height; y < hsl_height; y++) {
         s = 1.0 - (double)(y - palette_height) / (hsl_height - palette_height);
         pos = palette_width * y + x;
         color = hsl2rgb(hue, s, i);
         if (x == ipos || y == spos)
+          // x is at current intensity or y is at current saturation so set
+          // color to white xor interpolated color
           palette_image[pos] = 0xffffff ^ color;
         else
+          // else set interpolated color
           palette_image[pos] = color;
       }
+      // generate hue selection
       if (x == hpos)
+        // x is at selected hue so set highlight color (black)
         color = 0;
       else
+        // otherwise set interpolated color
         color = hsl2rgb(i * 360.0, (double)0.5, (double)0.5);
       for (y = hsl_height; y < total_height; y++) {
         pos = palette_width * y + x;
@@ -250,15 +269,16 @@ int process_palette_event(void (*update_image)()) {
     break;
   case ButtonPress:
     if (ev.xbutton.y < palette_height) {
+      // button press in palette selection panel
       switch (ev.xbutton.button) {
-      case 1:
+      case 1: // primary button - select palette color
         color_index = find_color_index(ev.xbutton.x);
         c = get_color((float)colorData.indices[color_index]);
         color = c[0] << 16 | c[1] << 8 | c[2];
         rgb2hsl(color);
         update_palette_image();
         break;
-      case 2:
+      case 2: // middle button - change indice to position in palette
         if (color_index > 0)
           c0 = colorData.indices[color_index - 1];
         else
@@ -273,7 +293,7 @@ int process_palette_event(void (*update_image)()) {
           update_image();
         }
         break;
-      case 3:
+      case 3: // secondary button - add indice at position in palette
         add_color_index(ev.xbutton.x);
         c = get_color((float)colorData.indices[color_index]);
         color = c[0] << 16 | c[1] << 8 | c[2];
@@ -286,12 +306,16 @@ int process_palette_event(void (*update_image)()) {
         break;
       }
     } else if (hue >= 0 && ev.xbutton.y < hsl_height) {
+      // else button press in intensity by saturation selection panel
+      // any button - select current intensity (x) / saturation (y)
       intensity = (double)ev.xbutton.x / palette_width;
       saturation = 1.0 - (double)(ev.xbutton.y - palette_height) /
                              (hsl_height - palette_height);
       update_palette();
       update_image();
     } else {
+      // else button press in hue selection panel
+      // any button - select current hue
       hue = 360.0 * (double)ev.xbutton.x / palette_width;
       update_palette();
       update_image();
@@ -299,10 +323,10 @@ int process_palette_event(void (*update_image)()) {
     break;
   case KeyPress:
     switch (ev.xkey.keycode) {
-    case 9: // Esc
+    case 9: // esc - exit palette display
       teardown_palette();
       return FALSE;
-    case 119:
+    case 119: // delete - delete current selected indice
       remove_color_index();
       if (color_index == colorData.nindex) {
         teardown_palette();

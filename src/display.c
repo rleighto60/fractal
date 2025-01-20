@@ -11,8 +11,8 @@ extern struct ViewData viewData;
 extern UBYTE *get_color(float fiter);
 
 char *file;
-int *image = NULL, zoom = 1;
-long xres = 1200, yres = 1200;
+int *image = NULL, scale, max_scale = 1;
+long xres = 1200, yres = 1200, xoff = 0, yoff = 0;
 Display *display = NULL;
 XImage *ximage;
 Window window;
@@ -29,15 +29,22 @@ void teardown() {
   }
 }
 
-int get_zoom_color(long x, long y) {
+// get color at scaled position
+int get_scale_color(long x, long y) {
   int n = 0;
-  long i, j, pos;
+  long i, j, sx, sy, pos;
   float fiter = 0.0, titer = 0.0;
   UBYTE *c;
 
-  pos = (viewData.xres * y + x) * zoom;
-  for (i = 0; i < zoom; i++) {
-    for (j = 0; j < zoom; j++) {
+  sx = x + xoff;
+  sy = y + yoff;
+
+  if (sx < 0 || sy < 0 || sx >= viewData.xres || sy >= viewData.yres)
+    return 0;
+
+  pos = (viewData.xres * sy + sx) * scale;
+  for (i = 0; i < scale; i++) {
+    for (j = 0; j < scale; j++) {
       fiter = buf[pos + (viewData.xres * i) + j];
       if (fiter >= 0) {
         titer += fiter;
@@ -57,7 +64,7 @@ void update_image() {
   for (y = 0; y < yres; y++) {
     for (x = 0; x < xres; x++) {
       pos = xres * y + x;
-      image[pos] = get_zoom_color(x, y);
+      image[pos] = get_scale_color(x, y);
     }
   }
 
@@ -67,8 +74,10 @@ void update_image() {
 
 void init_display() {
   if (display == NULL) {
-    xres = viewData.xres / zoom;
-    yres = viewData.yres / zoom;
+    max_scale = (int)(0.5 + (double)viewData.yres / (double)yres);
+    scale = max_scale;
+    xres = viewData.xres / scale;
+    yres = viewData.yres / scale;
 
     long buflen = xres * yres;
 
@@ -93,6 +102,7 @@ void init_display() {
 int process_event() {
   Atom wmDeleteWindow = XInternAtom(display, "WM_DELETE_WINDOW", FALSE);
   XEvent ev;
+  long sx, sy;
 
   XSetWMProtocols(display, window, &wmDeleteWindow, 1);
   XNextEvent(display, &ev);
@@ -103,35 +113,40 @@ int process_event() {
               yres);
     break;
   case ButtonPress:
+    sx = (long)(ev.xbutton.x + xoff) * scale / max_scale;
+    sy = (long)(ev.xbutton.y + yoff) * scale / max_scale;
     if (ev.xbutton.button == 4) {
-      zoom++;
+      // scroll up - decrease scale
+      if (scale > 1)
+        scale--;
     } else if (ev.xbutton.button == 5) {
-      if (zoom > 1)
-        zoom--;
+      // scroll down - increase scale
+      if (scale < max_scale)
+        scale++;
     } else {
+      // any other button - exit display
       close_buf();
       teardown();
       return FALSE;
     }
-    printf("%d\n", zoom);
-    teardown();
+    xoff = sx * (max_scale - scale) / scale;
+    yoff = sy * (max_scale - scale) / scale;
     break;
   case KeyPress:
     switch (ev.xkey.keycode) {
-    case 9: // Esc
+    case 9: // esc - exit display
       close_buf();
       teardown();
       return FALSE;
-    case 33: // p - palette
+    case 33: // p - show palette editor
       palette(update_image);
       break;
-    case 27: // r - reset
+    case 27: // r - reset palette (todo)
       break;
-    case 39: // s - save
+    case 39: // s - save with current settings (palette)
       save_fff(file);
       break;
     }
-    printf("key code %d\n", ev.xkey.keycode);
     break;
   case ClientMessage:
     // handle close window gracefully
@@ -159,11 +174,10 @@ int main(int argc, char **argv) {
     return 0;
   }
 
+  init_display();
+
   while (open) {
-    if (display == NULL) {
-      init_display();
-      update_image();
-    }
+    update_image();
     open = process_event();
   }
 }
