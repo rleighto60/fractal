@@ -6,6 +6,7 @@ extern float *buf;
 extern int read_fff(char *file);
 extern int save_fff(char *file);
 extern void close_buf();
+extern void print_info();
 extern void palette(void (*update_image)());
 extern struct ViewData viewData;
 extern UBYTE *get_color(float fiter);
@@ -133,15 +134,19 @@ int process_event() {
     yoff = sy * (max_scale - scale) / scale;
     break;
   case KeyPress:
+    //printf("%d\n", ev.xkey.keycode);
     switch (ev.xkey.keycode) {
     case 9: // esc - exit display
       close_buf();
       teardown();
       return FALSE;
+    case 27: // r - reset palette (todo)
+      break;
+    case 31: // i - info
+      print_info();
+      break;
     case 33: // p - show palette editor
       palette(update_image);
-      break;
-    case 27: // r - reset palette (todo)
       break;
     case 39: // s - save with current settings (palette)
       save_fff(file);

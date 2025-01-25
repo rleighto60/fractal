@@ -8,8 +8,9 @@ extern struct ColorData colorData;
 extern UBYTE *get_color(float fiter);
 
 int *palette_image = NULL;
-int color_index = -1;
-long palette_width, palette_height = 50, hsl_height = 150, total_height = 160;
+int color_index = 0, last_x = 0, last_y = 0, palette_y = 0, dx = 0, dy = 0;
+long palette_width, palette_height = 50, shift_height = 60, hsl_height = 190,
+                    total_height = 200;
 double hue = 0.0, saturation = 0.0, intensity = 0.0;
 Display *palette_display = NULL;
 XImage *palette_ximage;
@@ -25,49 +26,6 @@ void teardown_palette() {
     free(palette_image);
     palette_image = NULL;
   }
-}
-
-void init_palette_display() {
-  if (palette_display == NULL) {
-    int first = colorData.indices[0];
-    int last = colorData.indices[colorData.nindex - 1];
-
-    palette_width = first + last;
-
-    long buflen = palette_width * total_height;
-
-    if ((palette_image = calloc((long)buflen, sizeof(int))) == NULL) {
-      fprintf(stderr, "main - insufficient memory!!!\n");
-    }
-
-    palette_display = XOpenDisplay(NULL);
-    Visual *visual = DefaultVisual(palette_display, 0);
-    palette_ximage = XCreateImage(
-        palette_display, visual,
-        DefaultDepth(palette_display, DefaultScreen(palette_display)), ZPixmap,
-        0, (char *)palette_image, palette_width, total_height, 32, 0);
-    palette_window =
-        XCreateSimpleWindow(palette_display, RootWindow(palette_display, 0), 0,
-                            0, palette_width, total_height, 1, 0, 0);
-
-    XSelectInput(palette_display, palette_window,
-                 ButtonPressMask | KeyPressMask | ExposureMask);
-    XMapWindow(palette_display, palette_window);
-  }
-}
-
-int find_color_index(int n) {
-  int nmin = palette_width, nclosest = -1, nlast = colorData.nindex - 1;
-  int dn;
-
-  for (int i = 0; i <= nlast; i++) {
-    dn = abs(colorData.indices[i] - n);
-    if (dn < nmin) {
-      nmin = dn;
-      nclosest = i;
-    }
-  }
-  return nclosest;
 }
 
 // set current hue, saturation, intensity values from specified rgb value
@@ -131,6 +89,54 @@ int hsl2rgb(double h, double s, double l) {
     color = rgb2color(m, m, m);
   }
   return color;
+}
+
+void init_palette_display() {
+  if (palette_display == NULL) {
+    int first = colorData.indices[0];
+    int last = colorData.indices[colorData.nindex - 1];
+
+    palette_width = first + last;
+
+    long buflen = palette_width * total_height;
+
+    if ((palette_image = calloc((long)buflen, sizeof(int))) == NULL) {
+      fprintf(stderr, "main - insufficient memory!!!\n");
+    }
+
+    rgb2hsl(colorData.comps[0][color_index] << 16 |
+            colorData.comps[1][color_index] << 8 |
+            colorData.comps[2][color_index]);
+
+    palette_display = XOpenDisplay(NULL);
+    Visual *visual = DefaultVisual(palette_display, 0);
+    palette_ximage = XCreateImage(
+        palette_display, visual,
+        DefaultDepth(palette_display, DefaultScreen(palette_display)), ZPixmap,
+        0, (char *)palette_image, palette_width, total_height, 32, 0);
+    palette_window =
+        XCreateSimpleWindow(palette_display, RootWindow(palette_display, 0), 0,
+                            0, palette_width, total_height, 1, 0, 0);
+
+    XSelectInput(palette_display, palette_window,
+                 ButtonPressMask | Button1MotionMask | KeyPressMask |
+                     ExposureMask);
+    XMapWindow(palette_display, palette_window);
+  }
+}
+
+int find_color_index(int n) {
+  int nmin = palette_width, nclosest = -1, nlast = colorData.nindex - 1;
+  int dn;
+
+  for (int i = 0; i <= nlast; i++) {
+    dn = abs(colorData.indices[i] - n);
+    if (dn < nmin) {
+      nmin = dn;
+      nclosest = i;
+    }
+  }
+  return nclosest;
 }
 
 // get interpolated color value at palette position
@@ -210,13 +216,23 @@ void update_palette_image() {
       palette_image[pos] = color;
     }
   }
+  for (x = 0; x < palette_width; x++) {
+    if (x == colorData.shift)
+      color = 0;
+    else
+      color = 0xffffff;
+    for (y = palette_height; y < shift_height; y++) {
+      pos = palette_width * y + x;
+      palette_image[pos] = color;
+    }
+  }
   if (hue >= 0) {
     // generate hsl selection panel
     for (x = 0; x < palette_width; x++) {
       i = (double)x / palette_width;
       // generate intensity (x) by saturation (y) selection
-      for (y = palette_height; y < hsl_height; y++) {
-        s = 1.0 - (double)(y - palette_height) / (hsl_height - palette_height);
+      for (y = shift_height; y < hsl_height; y++) {
+        s = 1.0 - (double)(y - shift_height) / (hsl_height - shift_height);
         pos = palette_width * y + x;
         color = hsl2rgb(hue, s, i);
         if (x == ipos || y == spos)
@@ -253,11 +269,68 @@ void update_palette() {
   update_palette_image();
 }
 
+void process_button_event(int button, int x, int y, void (*update_image)()) {
+  UBYTE *c;
+  int color, c0, c1;
+
+  if (palette_y < palette_height) {
+    // button press in palette selection panel
+    switch (button) {
+    case 1: // primary button - select palette indice
+      color_index = find_color_index(x);
+      c = get_color((float)colorData.indices[color_index]);
+      color = c[0] << 16 | c[1] << 8 | c[2];
+      rgb2hsl(color);
+      update_palette_image();
+      break;
+    case 2: // middle button - change indice to position in palette
+      if (color_index > 0)
+        c0 = colorData.indices[color_index - 1];
+      else
+        c0 = 0;
+      if (color_index < colorData.nindex - 1)
+        c1 = colorData.indices[color_index + 1];
+      else
+        c1 = palette_width;
+      if (x > c0 && x < c1) {
+        colorData.indices[color_index] = x;
+        update_palette_image();
+        update_image();
+      }
+      break;
+    case 3: // secondary button - add indice at position in palette
+      add_color_index(x);
+      if (x >= palette_width) {
+        teardown_palette();
+        init_palette_display();
+      }
+      update_palette_image();
+      break;
+    }
+  } else if (palette_y < shift_height) {
+    colorData.shift = x;
+    update_palette();
+    update_image();
+  } else if (hue >= 0 && palette_y < hsl_height) {
+    // else button press in intensity by saturation selection panel
+    // any button - select current intensity (x) / saturation (y)
+    intensity = (double)x / palette_width;
+    saturation =
+        1.0 - (double)(y - palette_height) / (hsl_height - palette_height);
+    update_palette();
+    update_image();
+  } else {
+    // else button press in hue selection panel
+    // any button - select current hue
+    hue = 360.0 * (double)x / palette_width;
+    update_palette();
+    update_image();
+  }
+}
+
 int process_palette_event(void (*update_image)()) {
   Atom wmDeleteWindow = XInternAtom(palette_display, "WM_DELETE_WINDOW", FALSE);
   XEvent ev;
-  UBYTE *c;
-  int color, c0, c1;
 
   XSetWMProtocols(palette_display, palette_window, &wmDeleteWindow, 1);
   XNextEvent(palette_display, &ev);
@@ -267,59 +340,21 @@ int process_palette_event(void (*update_image)()) {
     XPutImage(palette_display, palette_window, DefaultGC(palette_display, 0),
               palette_ximage, 0, 0, 0, 0, palette_width, total_height);
     break;
-  case ButtonPress:
-    if (ev.xbutton.y < palette_height) {
-      // button press in palette selection panel
-      switch (ev.xbutton.button) {
-      case 1: // primary button - select palette color
-        color_index = find_color_index(ev.xbutton.x);
-        c = get_color((float)colorData.indices[color_index]);
-        color = c[0] << 16 | c[1] << 8 | c[2];
-        rgb2hsl(color);
-        update_palette_image();
-        break;
-      case 2: // middle button - change indice to position in palette
-        if (color_index > 0)
-          c0 = colorData.indices[color_index - 1];
-        else
-          c0 = 0;
-        if (color_index < colorData.nindex - 1)
-          c1 = colorData.indices[color_index + 1];
-        else
-          c1 = palette_width;
-        if (ev.xbutton.x > c0 && ev.xbutton.x < c1) {
-          colorData.indices[color_index] = ev.xbutton.x;
-          update_palette_image();
-          update_image();
-        }
-        break;
-      case 3: // secondary button - add indice at position in palette
-        add_color_index(ev.xbutton.x);
-        c = get_color((float)colorData.indices[color_index]);
-        color = c[0] << 16 | c[1] << 8 | c[2];
-        rgb2hsl(color);
-        if (ev.xbutton.x >= palette_width) {
-          teardown_palette();
-          init_palette_display();
-        }
-        update_palette_image();
-        break;
-      }
-    } else if (hue >= 0 && ev.xbutton.y < hsl_height) {
-      // else button press in intensity by saturation selection panel
-      // any button - select current intensity (x) / saturation (y)
-      intensity = (double)ev.xbutton.x / palette_width;
-      saturation = 1.0 - (double)(ev.xbutton.y - palette_height) /
-                             (hsl_height - palette_height);
-      update_palette();
-      update_image();
-    } else {
-      // else button press in hue selection panel
-      // any button - select current hue
-      hue = 360.0 * (double)ev.xbutton.x / palette_width;
-      update_palette();
-      update_image();
+  case MotionNotify:
+    dx = abs(last_x - ev.xbutton.x);
+    dy = abs(last_y - ev.xbutton.y);
+    if (dx > 5 || dy > 5) {
+      last_x = ev.xbutton.x;
+      last_y = ev.xbutton.y;
+      process_button_event(1, ev.xbutton.x, ev.xbutton.y, update_image);
     }
+    break;
+  case ButtonPress:
+    last_x = ev.xbutton.x;
+    last_y = ev.xbutton.y;
+    palette_y = ev.xbutton.y;
+    process_button_event(ev.xbutton.button, ev.xbutton.x, ev.xbutton.y,
+                         update_image);
     break;
   case KeyPress:
     switch (ev.xkey.keycode) {

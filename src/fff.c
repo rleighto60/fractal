@@ -37,6 +37,17 @@ void clear_buf() {
     buf[pos] = 0.0;
 }
 
+void print_info() {
+  int i;
+  printf("size %ld %ld %d\n", viewData.xres, viewData.yres, viewData.scale);
+  printf("view %s %s %s\n", data.xc, data.yc, data.size);
+  printf("spectrum %d ", colorData.shift);
+  for (i = 0; i < colorData.nindex; ++i) {
+    printf("%d %02x%02x%02x ", colorData.indices[i], colorData.comps[0][i], colorData.comps[1][i], colorData.comps[2][i]);
+  }
+  printf("\n");
+}
+
 UBYTE *get_color(float fiter) {
   int nc;
   if (fiter < 0.0) {
