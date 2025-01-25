@@ -362,7 +362,7 @@ view(XC,
 \begin_layout Standard
 This command defines the fractal view center coordinates and size.
  If the size parameter value divided by the horizontal resolution (XRES) is less than double epsilon (
-\begin_inset Formula $2.220446E-16$
+\begin_inset Formula $2.220446*10^{-16}$
 \end_inset
 
 ) then arbitrary precision math will be used,
